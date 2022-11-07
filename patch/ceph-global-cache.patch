@@ -4036,7 +4036,7 @@ index bc39114a..c20331c2 100644
 +        OSDSession *s = p->second;
 +        int osd = p->first;
 +        ldout(cct, 3) << "NodeView Change osd=" << osd << " ops=" << s->ops << dendl;
-+        if (!(osd >> 20) || available_nodes.find((osd & ~(0x1 << 20)) >> 4) != available_nodes.end()) {
++        if (!(osd >> 20) || available_nodes.find((osd & 0xFFFF) >> 4) != available_nodes.end()) {
 +            ++p;
 +            continue;
 +        }
