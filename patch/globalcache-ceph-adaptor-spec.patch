@@ -1,0 +1,83 @@
+diff --git a/ceph.spec b/ceph.spec
+index e32d7754..e79adcae 100644
+--- a/ceph.spec
++++ b/ceph.spec
+@@ -1,3 +1,5 @@
++%define _binaries_in_noarch_packages_terminate_build 0
++
+ # vim: set noexpandtab ts=8 sw=8 :
+ #
+ # spec file for package ceph
+@@ -93,7 +95,7 @@
+ 
+ # unify libexec for all targets
+ %global _libexecdir %{_exec_prefix}/lib
+-
++%global _unitdir %{_exec_prefix}/libexec/systemd/system
+ # disable dwz which compresses the debuginfo
+ %global _find_debuginfo_dwz_opts %{nil}
+ 
+@@ -1154,7 +1156,7 @@ export CEPH_MFLAGS_JOBS="-j$CEPH_SMP_NCPUS"
+ 
+ env | sort
+ 
+-mkdir build
++sh do_cmake.sh -DWITH_GLOBAL_CACHE=ON -DCMAKE_BUILD_TYPE=Release
+ cd build
+ %if 0%{?rhel} == 7
+ CMAKE=cmake3
+@@ -1162,6 +1164,7 @@ CMAKE=cmake3
+ CMAKE=cmake
+ %endif
+ ${CMAKE} .. \
++    -DWITH_GLOBAL_CACHE=ON \
+     -DCMAKE_INSTALL_PREFIX=%{_prefix} \
+     -DCMAKE_INSTALL_LIBDIR=%{_libdir} \
+     -DCMAKE_INSTALL_LIBEXECDIR=%{_libexecdir} \
+@@ -1318,6 +1321,7 @@ rm -rf %{buildroot}
+ %dir %{_libdir}/rados-classes
+ %{_libdir}/rados-classes/*
+ %dir %{_libdir}/ceph
++%{_libdir}/ceph/libceph_client_adaptor_plugin.so
+ %dir %{_libdir}/ceph/erasure-code
+ %{_libdir}/ceph/erasure-code/libec_*.so*
+ %dir %{_libdir}/ceph/compressor
+diff --git a/do_cmake.sh b/do_cmake.sh
+index 3dc25c8d..631c3e92 100644
+--- a/do_cmake.sh
++++ b/do_cmake.sh
+@@ -44,7 +44,7 @@ if type cmake3 > /dev/null 2>&1 ; then
+ else
+     CMAKE=cmake
+ fi
+-${CMAKE} -DCMAKE_BUILD_TYPE=Debug $ARGS "$@" .. || exit 1
++${CMAKE} -DCMAKE_BUILD_TYPE=RelWithDebInfo $ARGS "$@" .. || exit 1
+ 
+ # minimal config to find plugins
+ cat <<EOF > ceph.conf
+diff --git a/install-deps.sh b/install-deps.sh
+index 96d8370d..d6c4d492 100644
+--- a/install-deps.sh
++++ b/install-deps.sh
+@@ -318,7 +318,7 @@ else
+ 	if [ "$control" != "debian/control" ] ; then rm $control; fi
+ 	$SUDO apt-get install -y libxmlsec1 libxmlsec1-nss libxmlsec1-openssl libxmlsec1-dev
+         ;;
+-    centos|fedora|rhel|ol|virtuozzo)
++    centos|fedora|rhel|ol|virtuozzo|openEuler)
+         yumdnf="yum"
+         builddepcmd="yum-builddep -y --setopt=*.skip_if_unavailable=true"
+         if test "$(echo "$VERSION_ID >= 22" | bc)" -ne 0; then
+diff --git a/src/pybind/mgr/dashboard/requirements.txt b/src/pybind/mgr/dashboard/requirements.txt
+index caa1db80..b5857d06 100644
+--- a/src/pybind/mgr/dashboard/requirements.txt
++++ b/src/pybind/mgr/dashboard/requirements.txt
+@@ -19,7 +19,7 @@ py==1.5.2
+ pycodestyle==2.4.0
+ pycparser==2.18
+ PyJWT==1.6.4
+-pyopenssl==17.5.0
++#pyopenssl==17.5.0
+ pytest==3.3.2
+ pytest-cov==2.5.1
+ pytest-faulthandler==1.0.1
