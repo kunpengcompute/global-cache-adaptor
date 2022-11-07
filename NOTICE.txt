@@ -1,0 +1,9 @@
+This software contains files from the open source project ceph 14.2.8, most of which is dual licensed under the LGPL version 2.1.
+Name: ceph
+Maintainer: Sage Weil <sage@newdream.net>
+Source: http://ceph.com/
+
+Files: src/server_adaptor/ClassHandler.h; src/server_adaptor/ClassHandler.cc; src/server_adaptor/class_api.cc;
+src/server_adaptor/objclass.h
+Copyright: (c) 2004-2010 by Sage Weil <sage@newdream.net>
+License: LGPL-2.1 or LGPL-3 (see COPYING-LGPL2.1)
