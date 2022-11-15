@@ -187,7 +187,7 @@ int RadosClientInit(rados_client_t *client,const std::string &cephConf)
 			ProxyDbgLogErr("set conf<keyring, %s> failed: %d", ProxyGetCephKeyring(), ret);
 			goto client_init_out;
 		}
-		ProxyDbgLogInfo("set config <keyring, %s> success.", ProxyGetCephKeyring());
+		ProxyDbgLogInfo("set config<keyring, %s> success.", ProxyGetCephKeyring());
 	}
 
 	ret = rados->conf_set(ProxyGetMonTimeOutOption(), str.c_str());
@@ -530,8 +530,7 @@ void RadosWriteOpAssertVersion(rados_op_t op, uint64_t ver)
 	writeOp->op.assert_version(ver);
 }
 
-void RadosWriteOpCmpext(rados_op_t op, const char *cmpBuf,
-			size_t cmpLen, uint64_t off, int *prval)
+void RadosWriteOpCmpext(rados_op_t op, const char *cmpBuf, size_t cmpLen, uint64_t off, int *prval)
 {
 	RadosObjectWriteOp *writeOp = static_cast<RadosObjectWriteOp *>(op);
 	bufferlist cmpBl;
@@ -539,8 +538,7 @@ void RadosWriteOpCmpext(rados_op_t op, const char *cmpBuf,
 	writeOp->op.cmpext(off, cmpBl, prval);
 }
 
-void RadosWriteOpCmpXattr(rados_op_t op, const char *name,
-			uint8_t compOperator, const char *value, size_t valLen)
+void RadosWriteOpCmpXattr(rados_op_t op, const char *name, uint8_t compOperator, const char *value, size_t valLen)
 {
 	RadosObjectWriteOp *writeOp = static_cast<RadosObjectWriteOp *>(op);
 	bufferlist valueBl;
@@ -548,8 +546,8 @@ void RadosWriteOpCmpXattr(rados_op_t op, const char *name,
 	writeOp->op.cmpxattr(name, compOperator, valueBl);
 }
 
-void RadosWriteOpOmapCmp(rados_op_t op, const char *key, uint8_t compOperator,
-			const char *value, size_t valLen, int *prval)
+void RadosWriteOpOmapCmp(rados_op_t op, const char *key, uint8_t compOperator, const char *value, size_t valLen,
+	int *prval)
 {
 	RadosObjectWriteOp *writeOp = static_cast<RadosObjectWriteOp *>(op);
 	bufferlist bl;
@@ -595,7 +593,8 @@ void RadosWriteOpWrite(rados_op_t op, const char *buffer, size_t len, uint64_t o
 	PROXY_FTDS_END_HIGH(PROXY_FTDS_OPS_OPINIT_WRITE, ts, ret);
 }
 
-void RadosWriteOpWriteBl(rados_op_t op, GcBufferList *bl, size_t len1, uint64_t off, AlignBuffer *alignBuffer, int isRelease)
+void RadosWriteOpWriteBl(rados_op_t op, GcBufferList *bl, size_t len1, uint64_t off, AlignBuffer *alignBuffer,
+	int isRelease)
 {
 	uint64_t ts = 0;
 	int32_t ret = 0;
@@ -610,9 +609,7 @@ void RadosWriteOpWriteBl(rados_op_t op, GcBufferList *bl, size_t len1, uint64_t 
 	uint32_t curSrcEntryIndex = 0;
 
 	//
-	if (alignBuffer != NULL &&
-		alignBuffer->prevAlignBuffer != NULL &&
-		alignBuffer->prevAlignLen != 0) {
+	if (alignBuffer != NULL && alignBuffer->prevAlignBuffer != NULL && alignBuffer->prevAlignLen != 0) {
 		writeOp->bl.append(alignBuffer->prevAlignBuffer, alignBuffer->prevAlignLen);
 	}
 
@@ -634,9 +631,7 @@ void RadosWriteOpWriteBl(rados_op_t op, GcBufferList *bl, size_t len1, uint64_t 
 	}
 
 	//
-	if (alignBuffer != NULL &&
-		alignBuffer->backAlignBuffer != NULL &&
-		alignBuffer->backAlignLen != 0) {
+	if (alignBuffer != NULL && alignBuffer->backAlignBuffer != NULL && alignBuffer->backAlignLen != 0) {
 		writeOp->bl.append(alignBuffer->backAlignBuffer, alignBuffer->backAlignLen);
 	}
 
@@ -660,8 +655,8 @@ void RadosWriteOpRemove(rados_op_t op)
 	PROXY_FTDS_END_HIGH(PROXY_FTDS_OPS_OPINIT_REMOVE, ts, ret);
 }
 
-void RadosWriteOpOmapSet(rados_op_t op, const char *const *keys,
-		const char *const *vals, const size_t *lens, size_t num)
+void RadosWriteOpOmapSet(rados_op_t op, const char *const *keys, const char *const *vals, const size_t *lens,
+	size_t num)
 {
 	RadosObjectWriteOp *writeOp = static_cast<RadosObjectWriteOp *>(op);
 	std::map<std::string, bufferlist> entries;
@@ -743,8 +738,7 @@ void RadosReadOpAssertVersion(rados_op_t op, uint64_t ver)
 	readOp->op.assert_version(ver);
 }
 
-void RadosReadOpCmpext(rados_op_t op, const char *cmpBuf,
-			size_t cmpLen, uint64_t off, int *prval)
+void RadosReadOpCmpext(rados_op_t op, const char *cmpBuf, size_t cmpLen, uint64_t off, int *prval)
 {
 	RadosObjectReadOp *readOp=static_cast<RadosObjectReadOp *>(op);
 	bufferlist bl;
@@ -752,8 +746,7 @@ void RadosReadOpCmpext(rados_op_t op, const char *cmpBuf,
 	readOp->op.cmpext(off, bl, prval);
 }
 
-void RadosReadOpCmpXattr(rados_op_t op, const char *name, uint8_t compOperator,
-			const char *value, size_t valueLen)
+void RadosReadOpCmpXattr(rados_op_t op, const char *name, uint8_t compOperator, const char *value, size_t valueLen)
 {
 	RadosObjectReadOp *readOp=static_cast<RadosObjectReadOp *>(op);
 	bufferlist bl;
@@ -823,8 +816,7 @@ void RadosGetXattrsEnd(proxy_xattrs_iter_t iter)
 	delete it;
 }
 
-void RadosReadOpOmapGetVals(rados_op_t op, const char *startAfter,
-	uint64_t maxReturn, rados_omap_iter_t *iter,
+void RadosReadOpOmapGetVals(rados_op_t op, const char *startAfter, uint64_t maxReturn, rados_omap_iter_t *iter,
 	unsigned char *pmore, int *prval)
 {
 	RadosObjectReadOp *readOp = static_cast<RadosObjectReadOp *>(op);
@@ -839,8 +831,8 @@ void RadosReadOpOmapGetVals(rados_op_t op, const char *startAfter,
 	*iter = oIter;
 }
 
-void RadosReadOpOmapGetKeys(rados_op_t op, const char *startAfter, uint64_t maxReturn,
-				proxy_omap_iter_t *iter, unsigned char *pmore, int *prval)
+void RadosReadOpOmapGetKeys(rados_op_t op, const char *startAfter, uint64_t maxReturn, proxy_omap_iter_t *iter,
+	unsigned char *pmore, int *prval)
 {
 	RadosObjectReadOp *readOp = static_cast<RadosObjectReadOp *>(op);
 	RadosOmapIter *oIter = new(std::nothrow) RadosOmapIter();
@@ -897,7 +889,8 @@ int RadosOmapGetNext(proxy_omap_iter_t iter, char **key, char **val, size_t *key
     return 0;
 }
 
-size_t RadosOmapIterSize(proxy_omap_iter_t iter) {
+size_t RadosOmapIterSize(proxy_omap_iter_t iter)
+{
     RadosOmapIter *it = static_cast<RadosOmapIter *>(iter);
     return it->values.size();
 }
@@ -908,8 +901,8 @@ void RadosOmapIterEnd(proxy_omap_iter_t iter)
     delete it;
 }
 
-void RadosReadOpOmapCmp(rados_op_t op, const char *key, uint8_t compOperator,
-			const char *val, size_t valLen, int *prval)
+void RadosReadOpOmapCmp(rados_op_t op, const char *key, uint8_t compOperator, const char *val, size_t valLen,
+	int *prval)
 {
     RadosObjectReadOp *readOp = static_cast<RadosObjectReadOp *>(op);
     bufferlist bl;
@@ -936,16 +929,15 @@ void RadosReadOpStat(rados_op_t op, uint64_t *psize, time_t *pmtime, int *prval)
 	PROXY_FTDS_END_HIGH(PROXY_FTDS_OPS_OPINIT_READSTAT, ts, ret);
 }
 
-void RadosReadOpRead(rados_op_t op, uint64_t offset, size_t len, char *buffer,
-			size_t *bytesRead, int *prval)
+void RadosReadOpRead(rados_op_t op, uint64_t offset, size_t len, char *buffer, size_t *bytesRead, int *prval)
 {
 	uint64_t ts = 0;
 	int32_t ret = 0;
 	PROXY_FTDS_START_HIGH(PROXY_FTDS_OPS_OPINIT_READ, ts);
     RadosObjectReadOp *readOp = static_cast<RadosObjectReadOp *>(op);
 	if (readOp == nullptr || buffer == nullptr || bytesRead == nullptr) {
-		ProxyDbgLogErr("readOp %p or buffer %p or bytesRead %p or prval %p is invalid",
-			readOp, buffer, bytesRead, prval);
+		ProxyDbgLogErr("readOp %p or buffer %p or bytesRead %p or prval %p is invalid", readOp, buffer, bytesRead,
+			prval);
 		PROXY_FTDS_END_HIGH(PROXY_FTDS_OPS_OPINIT_READ, ts, ret);
 		return;
 	}
@@ -975,10 +967,8 @@ void RadosReadOpReadBl(rados_op_t op, uint64_t offset,size_t len, GcBufferList *
 	PROXY_FTDS_END_HIGH(PROXY_FTDS_OPS_OPINIT_READBL, ts, ret);
 }
 
-void RadosReadOpCheckSum(rados_op_t op, proxy_checksum_type_t type,
-			const char *initValue, size_t initValueLen,
-			uint64_t offset, size_t len, size_t chunkSize,
-			char *pCheckSum, size_t checkSumLen, int *prval)
+void RadosReadOpCheckSum(rados_op_t op, proxy_checksum_type_t type, const char *initValue, size_t initValueLen,
+	uint64_t offset, size_t len, size_t chunkSize, char *pCheckSum, size_t checkSumLen, int *prval)
 {
     rados_checksum_type_t  rtype = (rados_checksum_type_t)type;
     RadosObjectReadOp *readOp = static_cast<RadosObjectReadOp *>(op);
@@ -989,9 +979,8 @@ void RadosReadOpCheckSum(rados_op_t op, proxy_checksum_type_t type,
     readOp->op.checksum(rtype, bl, offset, len, chunkSize, &(readOp->checksums), prval);
 }
 
-void RadosReadOpExec(rados_op_t op, const char *cls, const char *method,
-			const char *inBuf, size_t inLen, char **outBuf,
-			size_t *outLen, int *prval)
+void RadosReadOpExec(rados_op_t op, const char *cls, const char *method, const char *inBuf, size_t inLen, char **outBuf,
+	size_t *outLen, int *prval)
 {
     RadosObjectReadOp *readOp = static_cast<RadosObjectReadOp *>(op);
     bufferlist inbl;
@@ -1012,13 +1001,11 @@ int RadosOperationOperate(rados_op_t op, rados_ioctx_t io)
 	        RadosObjectReadOp *readOp = dynamic_cast<RadosObjectReadOp *>(rop);
 		bufferlist bl;
         	ret = ctx->operate(readOp->objectId, &(readOp->op), &bl);
-	}
-        break;
+		} break;
 	case BATCH_WRITE_OP: {
 	        RadosObjectWriteOp *writeOp = dynamic_cast<RadosObjectWriteOp *>(rop);
         	ret = ctx->operate(writeOp->objectId, &(writeOp->op));
-        }
-	break;
+        } break;
 	default:
 	break;
     }
@@ -1068,7 +1055,7 @@ void ReadCallback(rados_completion_t c, void *arg)
 		        memcpy(bl->entrys[curEntryIndex].buf, cbl.c_str(), size);
 		        leftLen -= size;
 		        curEntryIndex++;
-		        if (curEntryIndex >= ENTRY_PER_BUFFERLIST) {
+		        if (curEntryIndex >= ENTRY_PER_BUFFLIST) {
 		            curEntryIndex = 0;
 		            bl = bl->nextBufferList;
 		        }
@@ -1078,16 +1065,16 @@ void ReadCallback(rados_completion_t c, void *arg)
 	    }
 	} else {
 		if (ret == -2) {
-			ProxyDbgLogWarn("pool(%ld) or objects(%s) is not exists: %d", readOp->poolId, readOp->objectId.c_str(), ret);
+			ProxyDbgLogWarn("pool(%ld) or objects(%s) is not exists: %d", readOp->poolId, readOp->objectId.c_str(),
+				ret);
 		} else {
 			ProxyDbgLogErr("read pool(%ld) or objects(%s) failed: %d", readOp->poolId, readOp->objectId.c_str(), ret);
 		}
 	}
 
     if (ret == 0 && readOp->reqCtx.xattr.name != nullptr) {
-	memcpy(*(readOp->reqCtx.xattr.vals),
-		readOp->xattrs[readOp->reqCtx.xattr.name].c_str(),
-		readOp->xattrs[readOp->reqCtx.xattr.name].length());
+		memcpy(*(readOp->reqCtx.xattr.vals), readOp->xattrs[readOp->reqCtx.xattr.name].c_str(),
+			readOp->xattrs[readOp->reqCtx.xattr.name].length());
     }
    
     if (ret == 0 && readOp->reqCtx.xattrs.iter != nullptr) {
@@ -1096,19 +1083,17 @@ void ReadCallback(rados_completion_t c, void *arg)
     }
 
     if (ret == 0 && readOp->reqCtx.omap.iter != nullptr) {
-	RadosOmapIter *iter = static_cast<RadosOmapIter *>(readOp->reqCtx.omap.iter);
-	iter->i = iter->values.begin();
-	if (!iter->keys.empty()) {
-	    for (auto i : iter->keys) {
-		iter->values[i];
-	    }
+		RadosOmapIter *iter = static_cast<RadosOmapIter *>(readOp->reqCtx.omap.iter);
+		iter->i = iter->values.begin();
+		if (!iter->keys.empty()) {
+	    	for (auto i : iter->keys) {
+				iter->values[i];
+	    	}
         }
     }
 
     if (ret == 0 && readOp->reqCtx.checksum.pCheckSum != nullptr) {
-	memcpy(readOp->reqCtx.checksum.pCheckSum,
-		readOp->checksums.c_str(),
-		readOp->reqCtx.checksum.chunkSumLen);
+		memcpy(readOp->reqCtx.checksum.pCheckSum, readOp->checksums.c_str(), readOp->reqCtx.checksum.chunkSumLen);
     }
     
 	// TODO: other reqCtx;
@@ -1162,10 +1147,9 @@ int RadosOperationAioOperate( rados_client_t client, rados_op_t op, rados_ioctx_
 	        ret = ctx->aio_operate(readOp->objectId, readCompletion, &(readOp->op), NULL);
 	        if (ret !=0) {
 	            ProxyDbgLogErr("aio_operate failed: %d", ret);
-		}
+			}
 	        readCompletion->release();
-	    }
-	    break;
+	    } break;
 	    case BATCH_WRITE_OP: {
 	        RadosObjectWriteOp *writeOp = dynamic_cast<RadosObjectWriteOp *>(rop);
 			writeOp->ts = 0;
@@ -1177,10 +1161,9 @@ int RadosOperationAioOperate( rados_client_t client, rados_op_t op, rados_ioctx_
 	        ret=ctx->aio_operate(writeOp->objectId, writeCompletion, &(writeOp->op));
 	        if (ret !=0) {
 	            ProxyDbgLogErr("aio_operate failed: %d", ret);
-		}
+			}
 	        writeCompletion->release();
-	    }
-	    break;
+	    }	break;
 	    default:
 			ProxyDbgLogErr("unknown op: %u", rop->opType);
 			ret = -EINVAL;

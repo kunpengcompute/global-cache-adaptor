@@ -313,9 +313,10 @@ public:
    }
 
     int32_t Queue(ceph_proxy_op_t op, completion_t c) {
-		RadosObjectOperation *operation = reinterpret_cast<RadosObjectOperation *>(op);
+		RadosObjectOperation *operation = static_cast<RadosObjectOperation *>(op);
 		if (operation == nullptr || c == nullptr) {
 			ProxyDbgLogErr("operation %p or c %p is invalid", operation, c);
+			return -1;
 		}
 		if (operation->poolId < 0) {
 			ProxyDbgLogErr("invalid poolId: %ld", operation->poolId);

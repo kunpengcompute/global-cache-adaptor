@@ -120,7 +120,10 @@ int MsgModule::ConvertClientopToOpreq(OSDOp &clientop, OpRequestOps &oneOp, Opti
             }
         } break;
         case CEPH_OSD_OP_GETXATTRS:
-        case CEPH_OSD_OP_STAT:
+        case CEPH_OSD_OP_STAT: {
+            oneOp.opFlags = clientop.op.flags;
+            SaDatalog("Converting stat tid=%ld obj=%s flag=%u", tid, oneOp.objName.c_str(), oneOp.opFlags);
+        }
             break;
         case CEPH_OSD_OP_CALL: {
             string cname, mname;
@@ -137,7 +140,7 @@ int MsgModule::ConvertClientopToOpreq(OSDOp &clientop, OpRequestOps &oneOp, Opti
             } 
         } break;
         case CEPH_OSD_OP_LIST_SNAPS: {
-            SaDatalog("Converting COPYUP tid=%ld obj=%s", tid, oneOp.objName.c_str());
+            SaDatalog("Converting list snaps tid=%ld obj=%s", tid, oneOp.objName.c_str());
         }
             break;
         case CEPH_OSD_OP_CREATE:

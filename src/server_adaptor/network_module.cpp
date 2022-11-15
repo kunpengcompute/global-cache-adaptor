@@ -81,7 +81,11 @@ int NetworkModule::InitNetworkModule(const std::string &rAddr, const std::vector
     Salog(LV_DEBUG, LOG_TYPE, "Init network module.");
     int ret;
     if (ptrMsgModule == nullptr) {
-        ptrMsgModule = new MsgModule();
+        ptrMsgModule = new(std::nothrow) MsgModule();
+        if (ptrMsgModule == nullptr) {
+            Salog(LV_ERROR, LOG_TYPE, "memory alloc failed");
+            return -ENOMEM;
+        }
     }
     recvAddr = rAddr;
     vecPorts = rPort;
@@ -96,7 +100,11 @@ int NetworkModule::InitNetworkModule(const std::string &rAddr, const std::vector
     }
 #ifdef SA_PERF
     if (msgPerf == nullptr) {
-	    msgPerf = new MsgPerfRecord();
+	    msgPerf = new(std::nothrow) MsgPerfRecord();
+        if (msgPerf == nullptr) {
+            Salog(LV_ERROR, LOG_TYPE, "memory alloc failed");
+            return -ENOMEM;
+        }
     }
     if (g_msgPerf == nullptr) {
 	    g_msgPerf = msgPerf;
@@ -194,8 +202,22 @@ int NetworkModule::ThreadFuncBodyServer()
 
         svrMessenger->set_auth_server(&dummy_auth);
         svrMessenger->set_magic(MSG_MAGIC_TRACE_CTR);
-        Throttle *clientByteThrottler = new Throttle(g_ceph_context,"osd_client_bytes",messageSize);
-        Throttle *clientMsgThrottler = new Throttle(g_ceph_context,"osd_client_messages",messageCap);
+        Throttle *clientByteThrottler = nullptr;
+        Throttle *clientMsgThrottler = nullptr;
+        clientByteThrottler = new(std::nothrow) Throttle(g_ceph_context,"osd_client_bytes",messageSize);
+        clientMsgThrottler = new(std::nothrow) Throttle(g_ceph_context,"osd_client_messages",messageCap);
+        if (clientByteThrottler == nullptr || clientMsgThrottler == nullptr) {
+            Salog(LV_ERROR, LOG_TYPE, "Throttle memory alloc failed");
+            r = -ENOMEM;
+            *bindSuccess = 0;
+            if (clientByteThrottler) {
+                delete clientByteThrottler;
+            }
+            if (clientMsgThrottler) {
+                delete clientMsgThrottler;
+            }
+            goto out;
+        }
         svrMessenger->set_default_policy(Messenger::Policy::stateless_server(0));
         if (qosParam.enableThrottle) {
             Salog(LV_WARNING, LOG_TYPE, "set messenger throttlers.");
@@ -207,10 +229,20 @@ int NetworkModule::ThreadFuncBodyServer()
         if (r < 0) {
 	    Salog(LV_ERROR, LOG_TYPE, "bind error %s:%s", recvAddr.c_str(), strPort.c_str());
 	    *bindSuccess = 0;
-            goto out;
+        delete clientByteThrottler;
+        delete clientMsgThrottler;
+        goto out;
 	}
-
-    	SaServerDispatcher *svrDispatcher = new SaServerDispatcher(svrMessenger, ptrMsgModule, this);
+        SaServerDispatcher *svrDispatcher = nullptr;
+    	svrDispatcher = new(std::nothrow) SaServerDispatcher(svrMessenger, ptrMsgModule, this);
+        if (svrDispatcher == nullptr) {
+            Salog(LV_ERROR, LOG_TYPE, "memory alloc failed");
+            r = -ENOMEM;
+            *bindSuccess = 0;
+            delete clientByteThrottler;
+            delete clientMsgThrottler;
+            goto out;
+        }
 	svrDispatcher->ms_set_require_authorizer(false);
         svrMessenger->add_dispatcher_head(svrDispatcher);
         svrMessenger->start();
@@ -357,7 +389,16 @@ void NetworkModule::CreateWorkThread(uint32_t qnum, uint32_t portAmout, uint32_t
 
     for (uint64_t i = 0; i < queueNum; i++) {
         finishThread.push_back(false);
-        opDispatcher.push_back(new ClientOpQueue());
+        ClientOpQueue *cq = nullptr;
+        do {
+            cq = new(std::nothrow) ClientOpQueue();
+            if (cq) {
+                break;
+            }
+            Salog(LV_ERROR, LOG_TYPE, "memory alloc failed");
+            usleep(COMMON_SLEEP_TIME_MS * SA_THOUSAND_DEC);
+        } while (cq == nullptr);
+        opDispatcher.push_back(cq);
     }
     for (uint64_t i = 0; i < queueNum; i++) {
 	int cpuNum = saCoreId[i % saCoreId.size()];
@@ -483,7 +524,7 @@ void NetworkModule::OpHandlerThread(int threadNum, int coreId)
             }
             //
             while (!dealQueue.empty()) {
-                SaOpReq *opreq = new SaOpReq;
+                SaOpReq *opreq = new(std::nothrow) SaOpReq;
                 if (opreq == nullptr) {
                     SalogLimit(LV_ERROR, LOG_TYPE, "new nullptr");
                     usleep(COMMON_SLEEP_TIME_MS * SA_THOUSAND_DEC);
@@ -506,7 +547,7 @@ void NetworkModule::OpHandlerThread(int threadNum, int coreId)
                     GetReadBWCas(opreq->optionLength);
                 }
                 while (copyupFlag.load() == 1) {
-                    usleep(20 * SA_THOUSAND_DEC);
+                    usleep(50);
                 }
                 if (unlikely(opreq->exitsCopyUp == 1)) {
                     SaDatalog("exists copyup, set copyupFlag, tid=%ld", opreq->tid);
@@ -536,7 +577,7 @@ void NetworkModule::OpHandlerThread(int threadNum, int coreId)
                 sleep(1);
                 ceph_assert("Lock queue mutex catch std::exception 2" == nullptr);
             }
-            sa->FtdsEndHigt(SA_FTDS_LOCK_ONE, "SA_FTDS_OP_LIFE", lockTsOne, 0);
+            sa->FtdsEndHigt(SA_FTDS_LOCK_ONE, "SA_FTDS_LOCK_ONE", lockTsOne, 0);
             continue;
         }
     try {
@@ -1117,11 +1158,18 @@ void NetworkModule::PutReadBWCas(unsigned long int c)
 void FinishCacheOps(void *op, uint32_t optionType, uint64_t optionLength, int32_t r)
 {
     MOSDOp *ptr = (MOSDOp *)(op);
+    MOSDOpReply *reply = nullptr;
     if (ptr == nullptr) {
         Salog(LV_ERROR, LOG_TYPE, " finish. but mosdop is null");
         return;
     }
-    MOSDOpReply *reply = new MOSDOpReply(ptr, 0, 0, 0, false);
+    do {
+        reply = new(std::nothrow) MOSDOpReply(ptr, 0, 0, 0, false);
+        if (reply) {
+            break;
+        }
+        SalogLimit(LV_ERROR, LOG_TYPE, " memory alloc failed");
+    } while (reply == nullptr);
     reply->claim_op_out_data(ptr->ops);
     reply->set_result(r);
     reply->add_flags(CEPH_OSD_FLAG_ACK | CEPH_OSD_FLAG_ONDISK);
@@ -1155,14 +1203,18 @@ void SetOpResult(int i, int32_t ret, MOSDOp *op)
         Salog(LV_ERROR, LOG_TYPE, " mosdop %p is null, skip", op);
         return;
     }
+    if ((uint32_t)i >= op->ops.size()) {
+        Salog(LV_ERROR, LOG_TYPE, " index %d >= %u overflow", i, op->ops.size());
+        return;
+    }
     op->ops[i].rval = ret;
 }
 
 void ProcessBuf(const char *buf, uint32_t len, int cnt, void *p)
 {
     MOSDOp *ptr = (MOSDOp *)(p);
-    if (ptr == nullptr) {
-        Salog(LV_ERROR, LOG_TYPE, " mosdop %p is null, skip", ptr);
+    if (ptr == nullptr || buf == nullptr) {
+        Salog(LV_ERROR, LOG_TYPE, " mosdop %p or buf %p is null, skip", ptr, buf);
         return;
     }
     encode(std::string_view(buf, len), ptr->ops[cnt].outdata);
@@ -1173,6 +1225,10 @@ void EncodeOmapGetkeys(const SaBatchKeys *batchKeys, int i, MOSDOp *mosdop)
     bufferlist bl;
     if (mosdop == nullptr || batchKeys == nullptr) {
         Salog(LV_ERROR, LOG_TYPE, " mosdop %p or batchKeys %p is null, skip", mosdop, batchKeys);
+        return;
+    }
+    if ((uint32_t)i >= mosdop->ops.size()) {
+        Salog(LV_ERROR, LOG_TYPE, " index %d >= %u overflow", i, mosdop->ops.size());
         return;
     }
     for (uint32_t j = 0; j < batchKeys->nums; j++) {
@@ -1189,6 +1245,10 @@ void EncodeOmapGetvals(const SaBatchKv *KVs, int i, MOSDOp *mosdop)
     bufferlist bl;
     if (mosdop == nullptr || KVs == nullptr) {
         Salog(LV_ERROR, LOG_TYPE, " mosdop %p or KVs %p is null, skip", mosdop, KVs);
+        return;
+    }
+    if ((uint32_t)i >= mosdop->ops.size()) {
+        Salog(LV_ERROR, LOG_TYPE, " index %d >= %u overflow", i, mosdop->ops.size());
         return;
     }
     Salog(LV_DEBUG, LOG_TYPE, "CEPH_OSD_OP_OMAPGETVALS get key num=%d", KVs->kvNum);
@@ -1214,6 +1274,10 @@ void EncodeOmapGetvalsbykeys(const SaBatchKv *keyValue, int i, MOSDOp *mosdop)
         Salog(LV_ERROR, LOG_TYPE, " mosdop %p or keyValue %p is null, skip", mosdop, keyValue);
         return;
     }
+    if ((uint32_t)i >= mosdop->ops.size()) {
+        Salog(LV_ERROR, LOG_TYPE, " index %d >= %u overflow", i, mosdop->ops.size());
+        return;
+    }
     for (uint32_t j = 0; j < keyValue->kvNum; j++) {
         bufferlist value;
         string keys(keyValue->keys[j].buf, keyValue->keys[j].len);
@@ -1226,8 +1290,12 @@ void EncodeOmapGetvalsbykeys(const SaBatchKv *keyValue, int i, MOSDOp *mosdop)
 void EncodeRead(uint64_t opType, unsigned int offset, unsigned int len, const char *buf, unsigned int bufLen, int i,
     MOSDOp *mosdop)
 {
-    if (mosdop == nullptr) {
-        Salog(LV_ERROR, LOG_TYPE, " mosdop %p is null, skip", mosdop);
+    if (mosdop == nullptr || buf == nullptr) {
+        Salog(LV_ERROR, LOG_TYPE, " mosdop %p or buf %p is null, skip", mosdop, buf);
+        return;
+    }
+    if ((uint32_t)i >= mosdop->ops.size()) {
+        Salog(LV_ERROR, LOG_TYPE, " index %d >= %u overflow", i, mosdop->ops.size());
         return;
     }
     if (unlikely(opType == CEPH_OSD_OP_SPARSE_READ)) {
@@ -1246,6 +1314,10 @@ void EncodeXattrGetXattr(const SaBatchKv *keyValue, int i, MOSDOp *mosdop)
         Salog(LV_ERROR, LOG_TYPE, " mosdop %p or keyValue %p is null, skip", mosdop, keyValue);
         return;
     }
+    if ((uint32_t)i >= mosdop->ops.size()) {
+        Salog(LV_ERROR, LOG_TYPE, " index %d >= %u overflow", i, mosdop->ops.size());
+        return;
+    }
     mosdop->ops[i].outdata.clear();
     for (uint32_t j = 0; j < keyValue->kvNum; j++) {
         bufferptr ptr(keyValue->values[j].buf, keyValue->values[j].len);
@@ -1257,6 +1329,10 @@ void EncodeXattrGetXattrs(const SaBatchKv *keyValue, int i, MOSDOp *mosdop)
 {
     if (mosdop == nullptr || keyValue == nullptr) {
         Salog(LV_ERROR, LOG_TYPE, " mosdop %p or keyValue %p is null, skip", mosdop, keyValue);
+        return;
+    }
+    if ((uint32_t)i >= mosdop->ops.size()) {
+        Salog(LV_ERROR, LOG_TYPE, " index %d >= %u overflow", i, mosdop->ops.size());
         return;
     }
     map<string, bufferlist> out;
@@ -1277,6 +1353,10 @@ void EncodeGetOpstat(uint64_t psize, time_t ptime, int i, MOSDOp *mosdop)
         Salog(LV_ERROR, LOG_TYPE, " mosdop %p is null, skip", mosdop);
         return;
     }
+    if ((uint32_t)i >= mosdop->ops.size()) {
+        Salog(LV_ERROR, LOG_TYPE, " index %d >= %u overflow", i, mosdop->ops.size());
+        return;
+    }
     encode(psize, mosdop->ops[i].outdata);
     encode(ptime, mosdop->ops[i].outdata);
 }
@@ -1285,6 +1365,14 @@ void EncodeListSnaps(const ObjSnaps *objSnaps, int i, MOSDOp *mosdop)
 {
     if (mosdop == nullptr || objSnaps == nullptr) {
         Salog(LV_ERROR, LOG_TYPE, " mosdop %p or objSnaps %p is null, skip", mosdop, objSnaps);
+        return;
+    }
+    if ((uint32_t)i >= mosdop->ops.size()) {
+        Salog(LV_ERROR, LOG_TYPE, " index %d >= %u overflow", i, mosdop->ops.size());
+        return;
+    }
+    if (objSnaps->cloneInfoNum < 1) {
+        Salog(LV_ERROR, LOG_TYPE, " cloneInfoNum at lease 1");
         return;
     }
     obj_list_snap_response_t resp;
@@ -1308,7 +1396,7 @@ void EncodeListSnaps(const ObjSnaps *objSnaps, int i, MOSDOp *mosdop)
         }
         resp.clones.push_back(ci);
     }
-    {
+    if (objSnaps->cloneInfoNum >= 1) {
         clone_info ci;
         CloneInfo &CI = objSnaps->cloneInfos[objSnaps->cloneInfoNum - 1];
         ci.cloneid = snapid_t(-2);

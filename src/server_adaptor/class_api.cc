@@ -96,10 +96,10 @@ int cls_unregister_method(cls_method_handle_t handle)
 
 int cls_getxattr(cls_method_context_t hctx, const char *name, char **outdata, int *outdatalen)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	OpRequestOps op;
 	int r;
 	
@@ -127,10 +127,10 @@ int cls_getxattr(cls_method_context_t hctx, const char *name, char **outdata, in
 
 int cls_setxattr(cls_method_context_t hctx, const char *name, const char *value, int val_len)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	OpRequestOps op;
 
 	op.opSubType = CEPH_OSD_OP_SETXATTR;
@@ -145,10 +145,10 @@ int cls_setxattr(cls_method_context_t hctx, const char *name, const char *value,
 
 int cls_get_request_origin(cls_method_context_t hctx, entity_inst_t *origin)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 
 	*origin = ptr->get_orig_source_inst();
 	return 0;
@@ -162,19 +162,19 @@ uint64_t cls_get_features(cls_method_context_t hctx)
 
 uint64_t cls_get_client_features(cls_method_context_t hctx)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 
 	return ptr->get_connection()->get_features();
 }
 
 int cls_cxx_create(cls_method_context_t hctx, bool exclusive)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	SaOpReq opreq = *pOpReq;
 	OpRequestOps op;
 	op.opSubType = CEPH_OSD_OP_CREATE;
@@ -187,9 +187,9 @@ int cls_cxx_create(cls_method_context_t hctx, bool exclusive)
 
 int cls_cxx_remove(cls_method_context_t hctx)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	SaOpReq opreq = *pOpReq;
 	OpRequestOps op;
 	op.opSubType = CEPH_OSD_OP_DELETE;
@@ -202,10 +202,10 @@ int cls_cxx_remove(cls_method_context_t hctx)
 
 int cls_cxx_stat(cls_method_context_t hctx, uint64_t *size, time_t *mtime)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	OpRequestOps op;
 	int r;
 
@@ -239,10 +239,10 @@ int cls_cxx_stat(cls_method_context_t hctx, uint64_t *size, time_t *mtime)
 
 int cls_cxx_stat2(cls_method_context_t hctx, uint64_t *size, ceph::real_time *mtime)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	OpRequestOps op;
 	int r;
 
@@ -254,6 +254,7 @@ int cls_cxx_stat2(cls_method_context_t hctx, uint64_t *size, ceph::real_time *mt
 	op.rbdObjId.format = pOpReq->vecOps[pctx->opId].rbdObjId.format;
 	op.rbdObjId.poolId = pOpReq->vecOps[pctx->opId].rbdObjId.poolId;
 	op.objName = pOpReq->vecOps[pctx->opId].objName; // ptr->get_oid().name;
+	op.opFlags = 1;	// assert exists
 
 	vector<OSDOp> ops(1);
 	ops.swap(ptr->ops);
@@ -288,10 +289,10 @@ int cls_cxx_read(cls_method_context_t hctx, int ofs, int len, bufferlist *outbl)
 int cls_cxx_read2(cls_method_context_t hctx, int ofs, int len, 
 		bufferlist *outbl, uint32_t op_flags)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	OpRequestOps op;
 	int r;
 
@@ -302,7 +303,6 @@ int cls_cxx_read2(cls_method_context_t hctx, int ofs, int len,
 	op.objName = ptr->get_oid().name;
 	op.objOffset = ofs;
 	op.objLength = len;
-	op.outData = new char[len];
 	op.outDataLen = len;
 
 	vector<OSDOp> ops(1);
@@ -325,7 +325,7 @@ int cls_cxx_write(cls_method_context_t hctx, int ofs, int len, bufferlist *inbl)
 
 int cls_cxx_write2(cls_method_context_t hctx, int ofs, int len, bufferlist *inbl, uint32_t op_flags)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
 	OpRequestOps op;
@@ -350,10 +350,10 @@ int cls_cxx_write2(cls_method_context_t hctx, int ofs, int len, bufferlist *inbl
 
 int cls_cxx_write_full(cls_method_context_t hctx, bufferlist *inbl)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	OpRequestOps op;
 	
 	op.opSubType = CEPH_OSD_OP_WRITEFULL;
@@ -370,10 +370,10 @@ int cls_cxx_write_full(cls_method_context_t hctx, bufferlist *inbl)
 
 int cls_cxx_getxattr(cls_method_context_t hctx, const char *name, bufferlist *outbl)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	OpRequestOps op;
 	int r;
 
@@ -396,10 +396,10 @@ int cls_cxx_getxattr(cls_method_context_t hctx, const char *name, bufferlist *ou
 
 int cls_cxx_getxattrs(cls_method_context_t hctx, map<string, bufferlist> *attrset)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	OpRequestOps op;
 	int r;
 
@@ -426,10 +426,10 @@ int cls_cxx_getxattrs(cls_method_context_t hctx, map<string, bufferlist> *attrse
 
 int cls_cxx_setxattr(cls_method_context_t hctx, const char *name, bufferlist *inbl)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	OpRequestOps op;
 	
 	op.opSubType = CEPH_OSD_OP_SETXATTR;
@@ -447,10 +447,10 @@ int cls_cxx_setxattr(cls_method_context_t hctx, const char *name, bufferlist *in
 
 int cls_cxx_map_get_all_vals(cls_method_context_t hctx, map<string, bufferlist> *vals, bool *more)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	OpRequestOps op;
 	int r;
 	uint64_t max_to_get = -1;
@@ -487,10 +487,10 @@ int cls_cxx_map_get_all_vals(cls_method_context_t hctx, map<string, bufferlist> 
 int cls_cxx_map_get_keys(cls_method_context_t hctx, const string &start_obj, uint64_t max_to_get, set<string> *keys,
 	bool *more)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	OpRequestOps op;
 	int r;
 	op.opSubType = CEPH_OSD_OP_OMAPGETKEYS;
@@ -523,10 +523,10 @@ int cls_cxx_map_get_keys(cls_method_context_t hctx, const string &start_obj, uin
 int cls_cxx_map_get_vals(cls_method_context_t hctx, const string &start_obj, const string &filter_prefix, 
 	uint64_t max_to_get, map<string, bufferlist> *vals, bool *more)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	OpRequestOps op;
 	int r;
 	
@@ -562,10 +562,10 @@ int cls_cxx_map_get_vals(cls_method_context_t hctx, const string &start_obj, con
 
 int cls_cxx_map_read_header(cls_method_context_t hctx, bufferlist *outbl)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	OpRequestOps op;
 	int r;
 
@@ -588,10 +588,10 @@ int cls_cxx_map_read_header(cls_method_context_t hctx, bufferlist *outbl)
 
 int cls_cxx_map_get_val(cls_method_context_t hctx, const string &key, bufferlist *outbl)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	OpRequestOps op;
 	int r;
 
@@ -626,10 +626,10 @@ int cls_cxx_map_get_val(cls_method_context_t hctx, const string &key, bufferlist
 
 int cls_cxx_map_set_val(cls_method_context_t hctx, const string &key, bufferlist *inbl)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	OpRequestOps op;
 	
 	op.opSubType = CEPH_OSD_OP_OMAPSETVALS;
@@ -647,10 +647,10 @@ int cls_cxx_map_set_val(cls_method_context_t hctx, const string &key, bufferlist
 
 int cls_cxx_map_set_vals(cls_method_context_t hctx, const std::map<string, bufferlist> *map)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	OpRequestOps op;
 	
 	op.opSubType = CEPH_OSD_OP_OMAPSETVALS;
@@ -671,10 +671,10 @@ int cls_cxx_map_set_vals(cls_method_context_t hctx, const std::map<string, buffe
 
 int cls_cxx_map_clear(cls_method_context_t hctx)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	OpRequestOps op;
 	
 	op.opSubType = CEPH_OSD_OP_OMAPCLEAR;
@@ -687,10 +687,10 @@ int cls_cxx_map_clear(cls_method_context_t hctx)
 
 int cls_cxx_map_write_header(cls_method_context_t hctx, bufferlist *inbl)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	OpRequestOps op;
 	
 	op.opSubType = CEPH_OSD_OP_OMAPSETHEADER;
@@ -705,10 +705,10 @@ int cls_cxx_map_write_header(cls_method_context_t hctx, bufferlist *inbl)
 
 int cls_cxx_map_remove_key(cls_method_context_t hctx, const string &key)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	SaOpReq *pOpReq = pctx->opReq;
 	SaOpReq opreq = *pOpReq;
-	MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+	MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
 	OpRequestOps op;
 	
 	op.opSubType = CEPH_OSD_OP_OMAPRMKEYS;
@@ -759,7 +759,7 @@ uint64_t cls_current_version(cls_method_context_t hctx)
 
 int cls_current_subop_num(cls_method_context_t hctx)
 {
-	SaOpContext *pctx = reinterpret_cast<SaOpContext *>(hctx);
+	SaOpContext *pctx = static_cast<SaOpContext *>(hctx);
 	return pctx->opId;
 }
 

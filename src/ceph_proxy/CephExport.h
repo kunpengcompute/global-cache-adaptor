@@ -21,13 +21,6 @@ PROXY_API_PUBLIC int CephLibrbdSnapRemove(int64_t pool_id,
 		uint64_t snap_id,
 		bool force);
 
-int CephLibrbdGetPoolName(std::string& pool_name, int64_t pool_id,
-	const std::string& namespace_name);
-
-int CephLibrbdGetImageName(const std::string& pool_name, int64_t pool_id,
-	const std::string& image_id, std::string& image_name,
-	const std::string& namespace_name);
-
 PROXY_API_PUBLIC int CephLibrbdGetImageInfo(int64_t pool_id,
 						const char *_image_id,
 						int32_t *num_objs);

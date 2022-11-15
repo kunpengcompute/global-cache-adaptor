@@ -58,7 +58,7 @@ int32_t RadosIOWorker::Queue(ceph_proxy_op_t op, completion_t c)
     reqCtx.op = op;
     reqCtx.comp = c;
 
-    RadosObjectOperation *operation = reinterpret_cast<RadosObjectOperation *>(op);
+    RadosObjectOperation *operation = static_cast<RadosObjectOperation *>(op);
     if (Ops.size() > IO_WORKER_QUEUE_MAX_COUNT) {
 	ProxyDbgLogErr("Too many requests are stacked in the IOWorker Queue, ops.size = %d, poolId: %d.",
 			Ops.size(), operation->poolId);
@@ -88,7 +88,7 @@ void* RadosIOWorker::OpHandler() {
 
 	    for (auto opair : ls) {
   		Completion *c = static_cast<Completion *>(opair.comp);
-    		RadosObjectOperation *operation = reinterpret_cast<RadosObjectOperation *>(opair.op);
+    		RadosObjectOperation *operation = static_cast<RadosObjectOperation *>(opair.op);
 		rados_ioctx_t ioctx = proxy->GetIoCtx2(operation->poolId);
 		if (ioctx == NULL) {
 		    ProxyDbgLogWarnLimit1("Get IOCtx(%u) Failed.", operation->poolId);

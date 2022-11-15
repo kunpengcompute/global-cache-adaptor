@@ -80,7 +80,14 @@ int CephProxy::Init(const std::string &cephConf,
 	char *savep;
 	p = strtok_r(tmp.get(), delim, &savep);
 	while (p) {
-	    vecCoreId.push_back(atoi(p));
+        errno = 0;
+        char *end = nullptr;
+        uint32_t id = (uint32_t)strtol(p, &end, 10);
+        if (errno == ERANGE || end == p) {
+            ProxyDbgLogErr("get core id failed.");
+            return -1;
+        }
+	    vecCoreId.push_back(id);
 	    p = strtok_r(nullptr, delim, &savep);
 	}
 	RadosBindMsgrWorker(vecCoreId, pid);

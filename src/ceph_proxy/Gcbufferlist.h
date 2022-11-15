@@ -10,12 +10,12 @@ typedef struct ListEntryType
     uint32_t len;
 } ListEntry;
 
-#define ENTRY_PER_BUFFERLIST 64
+#define ENTRY_PER_BUFFLIST 64
 typedef struct GcBufferListType
 {
     struct GcBufferListType *nextBufferList;
     uint16_t entrySumList;
-    ListEntry entrys[ENTRY_PER_BUFFERLIST];
+    ListEntry entrys[ENTRY_PER_BUFFLIST];
 } GcBufferList;
 
 #endif

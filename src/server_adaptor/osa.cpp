@@ -91,6 +91,7 @@ bool CheckLocalIp(const string &ipaddr)
 			0, NI_NUMERICHOST);
 		    if (s != 0) {
 			Salog(LV_ERROR, LOG_TYPE, "getnameinfo error %s", gai_strerror(s));
+            freeifaddrs(ifaddr);
 			return ret;
 		    }
 		    if (ipaddr == host) {
@@ -163,7 +164,7 @@ int OSA_Init(SaExport &sa)
 	    pPort = strtok_r(nullptr, delimPort, &savePort);
     }
     if (vecPort.size() <= 0 || vecPort.size() > 8) {
-	    Salog(LV_CRITICAL, LOG_TYPE, "error : port count is %d", vecPort.size());
+	    Salog(LV_CRITICAL, LOG_TYPE, "error : port count is %u", vecPort.size());
 	    return ERROR_PORT;
     }
 
@@ -177,7 +178,13 @@ int OSA_Init(SaExport &sa)
     char *savep;
     p = strtok_r(tmp.get(), delim, &savep);
     while (p) {
-	    int coreId = atoi(p);
+        errno = 0;
+        char *end = nullptr;
+	    int coreId = (int)strtol(p, &end, 10);
+        if (errno == ERANGE || end == p) {
+            Salog(LV_CRITICAL, LOG_TYPE, "error: get core id from str error");
+            return ERROR_PORT;
+        }
 	    if (CheckCoreId(coreId) == false) {
 		    Salog(LV_CRITICAL, LOG_TYPE, "error coreNumber %s", coreNumber.c_str());
 		    return ERROR_PORT;
@@ -188,30 +195,30 @@ int OSA_Init(SaExport &sa)
 
     uint32_t queueAmount = readConfig.GetQueueAmount();
     if (queueAmount > SA_QUEUE_MAX_NUM || queueAmount < SA_QUEUE_MIN_NUM) {
-	Salog(LV_CRITICAL, LOG_TYPE, "error : queueAmount number is %d should between %d~%d", queueAmount,
+	Salog(LV_CRITICAL, LOG_TYPE, "error : queueAmount number is %u should between %u~%u", queueAmount,
 			SA_QUEUE_MIN_NUM, SA_QUEUE_MAX_NUM);
 	return ERROR_PORT;
     }
    
     uint32_t queueMaxCapacity = readConfig.GetQueueMaxCapacity();
     if (queueMaxCapacity > SA_QUEUE_MAX_CAPACITY || queueMaxCapacity < SA_QUEUE_MIN_CAPACITY) {
-	Salog(LV_CRITICAL, LOG_TYPE, "error : queueMaxCapacity number is %d should between %d~%d", queueMaxCapacity,
+	Salog(LV_CRITICAL, LOG_TYPE, "error : queueMaxCapacity number is %u should between %u~%u", queueMaxCapacity,
 			SA_QUEUE_MIN_CAPACITY, SA_QUEUE_MAX_CAPACITY);
 	return ERROR_PORT;
     }
 
     uint32_t msgrAmount = readConfig.GetMsgrAmount();
     if (msgrAmount > SA_MSGR_MAX_NUM || msgrAmount < SA_MSGR_MIN_NUM) {
-	Salog(LV_CRITICAL, LOG_TYPE, "error : msgrAmount number is %d should between %d~%d", msgrAmount,
+	Salog(LV_CRITICAL, LOG_TYPE, "error : msgrAmount number is %u should between %u~%u", msgrAmount,
 			SA_MSGR_MIN_NUM, SA_MSGR_MAX_NUM);
  	return ERROR_PORT;
     }
 
     uint32_t bindCore = readConfig.GetBindCore();
     uint32_t bindSaCore = readConfig.GetBindQueueCore();
-    Salog(LV_WARNING, LOG_TYPE, "core binding is %d, %d", bindCore, bindSaCore);
+    Salog(LV_WARNING, LOG_TYPE, "core binding is %u, %u", bindCore, bindSaCore);
     if((msgrAmount + vecPort.size()) > vecCoreId.size() && bindCore) {
-        Salog(LV_CRITICAL, LOG_TYPE, "error : SA needs more than %d cores !", (msgrAmount+vecPort.size()));
+        Salog(LV_CRITICAL, LOG_TYPE, "error : SA needs more than %u cores !", (msgrAmount+vecPort.size()));
         return ERROR_PORT;
     }
 
@@ -220,21 +227,21 @@ int OSA_Init(SaExport &sa)
     qos.getQuotaCycle = readConfig.GetQuotCyc();
     qos.enableThrottle = readConfig.GetMessengerThrottle();
     qos.saOpThrottle = readConfig.GetSaOpThrottle();
-    Salog(LV_WARNING, LOG_TYPE, "SA QoS limitWrite=%d, time_cyc=%d ms, enableThrottle=%d, opThrottle=%lu",
+    Salog(LV_WARNING, LOG_TYPE, "SA QoS limitWrite=%u, time_cyc=%u ms, enableThrottle=%u, opThrottle=%llu",
         qos.limitWrite, qos.getQuotaCycle, qos.enableThrottle, qos.saOpThrottle);
 
     if (qos.getQuotaCycle < 1) {
-        Salog(LV_CRITICAL, LOG_TYPE, "error : get quota cycle is %d", qos.getQuotaCycle);
+        Salog(LV_CRITICAL, LOG_TYPE, "error : get quota cycle is %u", qos.getQuotaCycle);
         return ERROR_PORT;
     }
     if ((qos.saOpThrottle != 0) && (qos.saOpThrottle < 2000 || qos.saOpThrottle > 30000)) {
-        Salog(LV_CRITICAL, LOG_TYPE, "error : get quota cycle is %d, should in {0, [2000~30000]}", qos.saOpThrottle);
+        Salog(LV_CRITICAL, LOG_TYPE, "error : get quota cycle is %u, should in {0, [2000~30000]}", qos.saOpThrottle);
         return ERROR_PORT;
     }
 
     char szMsgrAmount[4] = {0};
     sprintf(szMsgrAmount, "%d", msgrAmount);
-    Salog(LV_INFORMATION, LOG_TYPE, "Server adaptor init queueAmount=%d szMsgrAmount=%s bindCore=%d bindSaCore=%d",
+    Salog(LV_INFORMATION, LOG_TYPE, "Server adaptor init queueAmount=%u szMsgrAmount=%s bindCore=%u bindSaCore=%u",
 		    queueAmount, szMsgrAmount, bindCore, bindSaCore);
 
     vector<const char *> args = { "--conf", "/opt/gcache/conf/gcache.conf" };
@@ -245,7 +252,18 @@ int OSA_Init(SaExport &sa)
     
     int ret = 0;
     if (g_ptrNetwork == nullptr) {
-        g_ptrNetwork = new NetworkModule(sa, vecCoreId, msgrAmount, bindCore, bindSaCore);
+        g_ptrNetwork = new(std::nothrow) NetworkModule(sa, vecCoreId, msgrAmount, bindCore, bindSaCore);
+        if (g_ptrNetwork == nullptr) {
+            Salog(LV_CRITICAL, LOG_TYPE, "error : memory alloc failed!");
+            return 1;
+        }
+        rpc_handler = new(std::nothrow) ClassHandler(g_ceph_context);
+        if (rpc_handler == nullptr) {
+            Salog(LV_CRITICAL, LOG_TYPE, "error : memory alloc failed!");
+            delete g_ptrNetwork;
+            g_ptrNetwork = nullptr;
+            return 1;
+        }
 	g_ptrNetwork->CreateWorkThread(queueAmount, vecPort.size(),queueMaxCapacity);
 	string sAddr = rAddr;
         string sPort = vecPort[0];
@@ -253,13 +271,24 @@ int OSA_Init(SaExport &sa)
 	Salog(LV_INFORMATION, LOG_TYPE, "Server adaptor init Port=%s" , rPort.c_str());
 	if (rPort == "") {
 	    Salog(LV_CRITICAL, LOG_TYPE, "error : Server adaptor Listen ip:port is empty.");
+        delete g_ptrNetwork;
+        g_ptrNetwork = nullptr;
+        delete rpc_handler;
+        rpc_handler = nullptr;
 	    return 1;
 	}
     g_ptrNetwork->SetQosParam(qos);
 	int bindSuccess = -1;
 	ret = g_ptrNetwork->InitNetworkModule(rAddr, vecPort, sAddr, sPort, &bindSuccess);
+    if (ret != 0) {
+        Salog(LV_CRITICAL, LOG_TYPE, "error : init network module error.");
+        delete g_ptrNetwork;
+        g_ptrNetwork = nullptr;
+        delete rpc_handler;
+        rpc_handler = nullptr;
+        return 1;
+    }
 
-	rpc_handler = new ClassHandler(g_ceph_context);
 	cls_initialize(rpc_handler);
 	rpc_init();
 	
@@ -292,6 +321,7 @@ int OSA_Finish()
     g_ptrNetwork = nullptr;
     if (rpc_handler) {
 	rpc_handler->shutdown();
+    delete rpc_handler;
 	rpc_handler = nullptr;
     }
     FinishSalog("sa");
@@ -371,7 +401,7 @@ int OSA_ExecClass(SaOpContext *pctx, PREFETCH_FUNC prefetch)
         return -EINVAL;
     }
     struct SaOpReq * pOpReq = pctx->opReq;
-    MOSDOp *ptr = reinterpret_cast<MOSDOp *>(pOpReq->ptrMosdop);
+    MOSDOp *ptr = static_cast<MOSDOp *>(pOpReq->ptrMosdop);
     if (ptr == nullptr) {
         Salog(LV_ERROR, LOG_TYPE, " mosdop %p is null, skip", ptr);
         return -EINVAL;

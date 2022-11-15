@@ -9,7 +9,6 @@
 #include <vector>
 #include <shared_mutex>
 #include <atomic>
-#include <assert.h>
 #include <regex>
 #include "rbd/librbd.h"
 #include "rados/librados.h"
@@ -53,24 +52,6 @@ static struct ProxyCtx gProxyCtx;
 using shared_lock = std::shared_lock<std::shared_mutex>;
 using unique_lock = std::unique_lock<std::shared_mutex>;
 
-static void GetPool(librados::IoCtx &io_ctx, int64_t &pool_id, std::string &pool_name)
-{
-	std::string poolName = io_ctx.get_pool_name();
-	pool_id = io_ctx.get_id();
-	pool_name.assign(poolName);
-}
-
-static void GetImage(librbd::Image &rbd_image, std::string &image_name, std::string &image_id)
-{
-
-	std::string imageName;
-	std::string imageId;
-	rbd_image.get_name(&imageName);
-	rbd_image.get_id(&imageId);
-	image_name.assign(imageName);
-	image_id.assign(imageId);
-}
-
 static void RadosShutdown()
 {
 	unique_lock l(gProxyCtx.lock);
@@ -83,7 +64,10 @@ static void RadosShutdown()
 
 static void FastInitRados(std::map<std::string, std::string>& conf_map)
 {
-	assert(gProxyCtx.init_flag == true);
+	if (!gProxyCtx.init_flag) {
+		ProxyDbgCrit("proxy Ctx not init!");
+		return;
+	}
 	gProxyCtx.ref++;
 	std::map<std::string, std::string>::iterator iter;
 	int ret;
@@ -126,7 +110,7 @@ static int RadosInit(std::map<std::string, std::string>& conf_map)
 {
 	uint32_t retryCount = 0;
 	{
-		shared_lock l(gProxyCtx.lock);
+		unique_lock l(gProxyCtx.lock);
 		if (gProxyCtx.init_flag) {
 			FastInitRados(conf_map);
 			return 0;
@@ -242,7 +226,10 @@ static int IoctxInit(librados::IoCtx* ioctx, const std::string& pool_name,
 	int64_t pool_id, const std::string& namespace_name)
 {
 	int ret;
-	assert(gProxyCtx.init_flag);
+	if (!gProxyCtx.init_flag) {
+		ProxyDbgCrit("proxy ctx not init");
+		return -1;
+	}
 	if (!pool_name.empty()) {
 		ret = gProxyCtx.client.ioctx_create(pool_name.c_str(), *ioctx);
 		if (ret < 0) {
@@ -327,7 +314,7 @@ static int ImageRemoveSnap(librbd::Image& image, const std::string& snap_name, u
 	} else {
 		ret = image.snap_remove_by_id(snap_id);
 		if (ret < 0) {
-			ProxyDbgLogErr("rbd snap remove failed. snap_id %lu ret %d", snap_id, ret);
+			ProxyDbgLogErr("rbd snap remove failed. snap_id %llu ret %d", snap_id, ret);
 			return ret;
 		}
 	}
@@ -368,6 +355,8 @@ int CephLibrbdSnapRemove(int64_t pool_id,
 		return -EINVAL;
 	}
 
+	ProxyDbgLogInfo("image remove snap start pool %lld:%s image %s:%s snap %llu:%s",
+		pool_id, pool_name.c_str(), image_id.c_str(), image_name.c_str(), snap_id, snap_name.c_str());
 	ret = RadosInit(confMap);
 	if (ret < 0) {
 		ProxyDbgLogErr("rados client Init failed: %d", ret);
@@ -406,82 +395,10 @@ int CephLibrbdSnapRemove(int64_t pool_id,
 		goto close_image;
 	}
 
-	ProxyDbgLogDebug("image remove snap success pool %ld:%s image %s:%s snap %lu:%s",
-		pool_id, pool_name, image_id, image_name, snap_id, snap_name);
+	ProxyDbgLogInfo("image remove snap success pool %lld:%s image %s:%s snap %llu:%s",
+		pool_id, pool_name.c_str(), image_id.c_str(), image_name.c_str(), snap_id, snap_name.c_str());
 
 close_image:
-	IoctxCloseImage(image);
-
-close_ioctx:
-	IoCtxDestroy(ioctx);
-
-shutdown:
-	RadosShutdown();
-	return ret;
-}
-
-int CephLibrbdGetPoolName(std::string& pool_name, int64_t pool_id,
-	const std::string& namespace_name)
-{
-	int ret;
-	librados::IoCtx ioctx;
-	int64_t pid;
-
-	std::map<std::string, std::string> confMap;
-
-	ret = RadosInit(confMap);
-	if (ret < 0) {
-		ProxyDbgLogErr("rados client Init failed: %d", ret);
-		return ret;
-	}
-
-	ret = IoctxInit(&ioctx, "", pool_id, namespace_name);
-	if (ret < 0) {
-		ProxyDbgLogErr("ioctx Init failed: %d", ret);
-		goto shutdown;
-	}
-
-	GetPool(ioctx, pid, pool_name);
-	assert(pid == pool_id);
-
-	IoCtxDestroy(ioctx);
-
-shutdown:
-	RadosShutdown();
-	return ret;
-}
-
-int CephLibrbdGetImageName(const std::string& pool_name, int64_t pool_id,
-	const std::string& image_id, std::string& image_name,
-	const std::string& namespace_name)
-{
-	int ret;
-	librados::IoCtx ioctx;
-	librbd::Image image;
-	std::string iid;
-
-	std::map<std::string, std::string> confMap;
-	ret = RadosInit(confMap);
-	if (ret < 0) {
-		ProxyDbgLogErr("rados client Init failed: %d", ret);
-		return ret;
-	}
-
-	ret = IoctxInit(&ioctx, "", pool_id, namespace_name);
-	if (ret < 0) {
-		ProxyDbgLogErr("ioctx Init failed: %d", ret);
-		goto shutdown;
-	}
-
-	ret = IoctxOpenImage(ioctx, "", image_id, &image);
-	if (ret < 0) {
-		ProxyDbgLogErr("image open failed: %d", ret);
-		goto close_ioctx;
-	}
-
-	GetImage(image, image_name, iid);
-	assert(iid == image_id);
-
 	IoctxCloseImage(image);
 
 close_ioctx:
@@ -515,7 +432,7 @@ int CephLibrbdGetImageInfo(int64_t pool_id,
 
 	ret = IoctxInit(&ioctx, "", pool_id, "");
 	if (ret < 0) {
-		ProxyDbgLogErr("ioctx %ld Init failed: %d", pool_id, ret);
+		ProxyDbgLogErr("ioctx %lld Init failed: %d", pool_id, ret);
 		goto shutdown;
 	}
 
@@ -547,7 +464,10 @@ shutdown:
 static int MonCommand(std::string cmd, std::string &_outs)
 {
 	int ret;
-	assert(gProxyCtx.init_flag);
+	if (!gProxyCtx.init_flag) {
+		ProxyDbgCrit("proxy ctx not init");
+		return -1;
+	}
 	std::string outs;
 	bufferlist inbl;
 	bufferlist outbl;
@@ -564,17 +484,18 @@ static int ParsePoolMap(std::string &outs, std::map<int64_t, struct SigPoolInfo>
 {
 	std::string pattern = "\\s*(\\d+)\\s+(\\S+)";
 	std::vector<std::string> preVec;
-	char *strs = new char[outs.length() + 1];
+	char *strs = new(std::nothrow) char[outs.length() + 1];
 	if (strs == nullptr) {
 		ProxyDbgLogErr("alloc memory failed");
 		return -1;
 	}
 	strcpy(strs, outs.c_str());
-	char *p = strtok(strs, "\n");
+	char *savep;
+	char *p = strtok_r(strs, "\n", &savep);
 	while (p) {
 		std::string s = p;
 		preVec.push_back(s);
-		p = strtok(NULL, "\n");
+		p = strtok_r(nullptr, "\n", &savep);
 	}
 
 	for (size_t i = 0; i < preVec.size(); i++) {
@@ -582,13 +503,20 @@ static int ParsePoolMap(std::string &outs, std::map<int64_t, struct SigPoolInfo>
 		std::smatch result;
 		bool flag = std::regex_match(preVec[i], result, expression);
 		if (flag) {
-			int64_t poolId = atoi(result[1].str().c_str());
+			errno = 0;
+			char *end = nullptr;
+			const char* p = result[1].str().c_str();
+			int64_t poolId = (int64_t)strtol(p, &end, 10);
+			if (errno == ERANGE || end == p) {
+				ProxyDbgLogErr("get poolId from str failed.");
+				break;
+			}
 			struct SigPoolInfo info;
 			info.poolId = poolId;
 			info.poolName = result[2].str().c_str();
 			info.usage = 0;
 			poolMap[poolId] = info;
-			ProxyDbgLogInfo("pool %s, id %ld", info.poolName.c_str(), info.poolId);
+			ProxyDbgLogInfo("pool %s, id %lld", info.poolName.c_str(), info.poolId);
 		}
 	}
 
@@ -613,17 +541,18 @@ static int GetECPoolScale(struct SigPoolInfo &info)
 	}
 
 	std::vector<std::string> preVec;
-	char *strs = new char[outs.length() + 1];
+	char *strs = new(std::nothrow) char[outs.length() + 1];
 	if (strs == nullptr) {
 		ProxyDbgLogErr("alloc memory failed");
 		return -1;
 	}
 	strcpy(strs, outs.c_str());
-	char *p = strtok(strs, "\n");
+	char *savep;
+	char *p = strtok_r(strs, "\n", &savep);
 	while (p) {
 		std::string s = p;
 		preVec.push_back(s);
-		p = strtok(NULL, "\n");
+		p = strtok_r(nullptr, "\n", &savep);
 	}
 
 	for (uint32_t i = 0; i < preVec.size(); i++) {
@@ -633,10 +562,21 @@ static int GetECPoolScale(struct SigPoolInfo &info)
 		if (!flag) {
 			continue;
 		}
+		errno = 0;
+    	char *end = nullptr;
+		const char *p = result[2].str().c_str();
 		if (result[1].str().compare("k") == 0) {
-			info.k = atoi(result[2].str().c_str());
+			info.k = (int)strtol(p, &end, 10);
+			if (errno == ERANGE || end == p) {
+				ProxyDbgLogErr("get k from str failed.");
+				break;
+			}
 		} else if (result[1].str().compare("m") == 0) {
-			info.m = atoi(result[2].str().c_str());
+			info.m = (int)strtol(p, &end, 10);
+			if (errno == ERANGE || end == p) {
+				ProxyDbgLogErr("get m from str failed.");
+				break;
+			}
 		}
 	}
 
@@ -685,7 +625,10 @@ static int CalPoolProperty(std::map<int64_t, struct SigPoolInfo> &poolMap)
 				ProxyDbgLogErr("get EC pool size failed! ret=%d", ret);
 				return ret;
 			}
-			assert(info.k != 0 && info.m != 0);
+			if (info.k == 0 || info.m == 0) {
+				ProxyDbgCrit("unexpected EC result k %d m %d", info.k, info.m);
+				return -1;
+			}
 			ProxyDbgLogInfo("EC pool %s, k=%d, m=%d", info.poolName.c_str(), info.k, info.m);
 		}
 	}
@@ -694,7 +637,7 @@ static int CalPoolProperty(std::map<int64_t, struct SigPoolInfo> &poolMap)
 
 static int DiffCallback(uint64_t offset, size_t len, int exists, void *arg)
 {
-	uint64_t *used = reinterpret_cast<uint64_t *>(arg);
+	uint64_t *used = static_cast<uint64_t *>(arg);
 	if (exists) {
 		(*used) += len;
 	}
@@ -756,7 +699,7 @@ static int CalImageUsage(librados::IoCtx &ioctx, struct SigPoolInfo& info, librb
 		}
 		info.usage += used;
 		lastSnap = snap.name.c_str();
-		ProxyDbgLogInfo("snap %s/%s@%s, used=%lu",
+		ProxyDbgLogInfo("snap %s/%s@%s, used=%llu",
 			info.poolName.c_str(), imageSpec.name.c_str(), snap.name.c_str(), used);
 	}
 
@@ -771,7 +714,7 @@ static int CalImageUsage(librados::IoCtx &ioctx, struct SigPoolInfo& info, librb
 		goto image_close;
 	}
 	info.usage += used;
-	ProxyDbgLogInfo("image %s/%s, used=%lu", info.poolName.c_str(), imageSpec.name.c_str(), used);
+	ProxyDbgLogInfo("image %s/%s, used=%llu", info.poolName.c_str(), imageSpec.name.c_str(), used);
 image_close:
 	image.close();
 	return ret;
