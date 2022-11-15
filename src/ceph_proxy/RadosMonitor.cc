@@ -50,7 +50,14 @@ void TransStrToNum(std::string strNum, uint64_t &num)
     std::smatch result;
     bool flag = std::regex_match(strNum, result, pattern);
     if (flag) {
-        uint32_t size = atoi(result[1].str().c_str());
+        errno = 0;
+        char *end = nullptr;
+        const char *p = result[1].str().c_str();
+        uint32_t size = (uint32_t)strtol(p, &end, 10);
+        if (errno == ERANGE || end == p) {
+            ProxyDbgLogErr("get size failed.");
+            return;
+        }
         uint64_t unit = TransStrUnitToNum(result[2].str().c_str());
         num = size * unit;
     } else {
@@ -123,7 +130,7 @@ int32_t PoolUsageStat::GetPoolInfo(uint32_t poolId, struct PoolInfo *info)
 
 int32_t PoolUsageStat::IsECPool(string poolName, string &ecProfile, bool &isEC)
 {
-    librados::Rados *rados = reinterpret_cast<librados::Rados *>(proxy->radosClient);
+    librados::Rados *rados = static_cast<librados::Rados *>(proxy->radosClient);
     std::string cmd("{\"var\": \"erasure_code_profile\", \"prefix\": \"osd pool get\", \"pool\": \"");
     std::string outs;
     bufferlist inbl;
@@ -158,11 +165,12 @@ int32_t PoolUsageStat::IsECPool(string poolName, string &ecProfile, bool &isEC)
 
 int32_t PoolUsageStat::GetECProfileSize(std::string profileName, uint32_t &k, uint32_t &m, uint32_t &stripeUnit)
 {
-    librados::Rados *rados = reinterpret_cast<librados::Rados *>(proxy->radosClient);
+    librados::Rados *rados = static_cast<librados::Rados *>(proxy->radosClient);
     std::string cmd("{\"prefix\": \"osd erasure-code-profile get\", \"name\": \"");
     std::string outs;
     bufferlist inbl;
     bufferlist outbl;
+    char *strs = nullptr;
     cmd.append(profileName);
     cmd.append(string("\"}"));
 
@@ -180,14 +188,18 @@ int32_t PoolUsageStat::GetECProfileSize(std::string profileName, uint32_t &k, ui
     }
 
     std::vector<string> infoVector;
-    char *strs = new char[outbl.to_str().size() + 1];
+    strs = new(std::nothrow) char[outbl.to_str().size() + 1];
+    if (strs == nullptr) {
+        ProxyDbgLogErr("malloc failed");
+        return -ENOMEM;
+    }
     strcpy(strs, outbl.c_str());
-
-    char *p = strtok(strs, "\n");
+    char *savep;
+    char *p = strtok_r(strs, "\n", &savep);
     while (p) {
         string s = p;
         infoVector.push_back(s);
-        p = strtok(NULL, "\n");
+        p = strtok_r(nullptr, "\n", &savep);
     }
 
     for (uint32_t i = 0; i < infoVector.size(); i++) {
@@ -208,10 +220,20 @@ void PoolUsageStat::ParseECProfile(string &profile, uint32_t &k, uint32_t &m, ui
     if (!flag) {
         return;
     }
+    errno = 0;
+    char *end = nullptr;
     if (result[1].str().compare("k") == 0) {
-        k = atoi(result[2].str().c_str());
+        const char *p = result[2].str().c_str();
+        k = (uint32_t)strtol(p, &end, 10);
+        if (errno == ERANGE || end == p) {
+            return;
+        }
     } else if (result[1].str().compare("m") == 0) {
-        m = atoi(result[2].str().c_str());
+        const char *p = result[2].str().c_str();
+        m = (uint32_t)strtol(p, &end, 10);
+        if (errno == ERANGE || end == p) {
+            return;
+        }
     } else if (result[1].str().compare("stripe_unit") == 0) {
         uint64_t val = 0;
         TransStrToNum(result[2].str().c_str(), val);
@@ -227,7 +249,7 @@ uint32_t PoolUsageStat::GetDefaultECStripeUnit()
     uint32_t stripeUnit = defaultStripeUnit;
     uint64_t num = 0;
 
-    librados::Rados *rados = reinterpret_cast<librados::Rados *>(proxy->radosClient);
+    librados::Rados *rados = static_cast<librados::Rados *>(proxy->radosClient);
     std::string cmd("{\"prefix\": \"config get\", \"who\": "    \
         "\"osd.-1\", \"key\": \"osd_pool_erasure_code_stripe_unit\"}");
     std::string outs;
@@ -273,6 +295,30 @@ int32_t PoolUsageStat::GetPoolReplicationSize(uint32_t poolId, double& rep)
     return 0;
 }
 
+static int StrToDouble(const char *src, double &dest, const char *print)
+{
+    errno = 0;
+    char *end = nullptr;
+    dest = strtod(src, &end);
+    if (errno == ERANGE || end == src) {
+        ProxyDbgLogErr("get %s from str failed.", print);
+        return -1;
+    }
+    return 0;
+}
+
+static int StrToInt(const char *src, int &dest, const char *print)
+{
+    errno = 0;
+    char *end = nullptr;
+    dest = (int)strtol(src, &end, 10);
+    if (errno == ERANGE || end == src) {
+        ProxyDbgLogErr("get %s from str failed.", print);
+        return -1;
+    }
+    return 0;
+}
+
 int32_t PoolUsageStat::ParseToRecordInfo(std::smatch& result, struct RecordInfo &info)
 {
     //
@@ -281,17 +327,24 @@ int32_t PoolUsageStat::ParseToRecordInfo(std::smatch& result, struct RecordInfo 
             info.poolName = result[i].str().c_str();
         }
         if (i == 2) {
-            int id = atoi(result[i].str().c_str());
+            int id;
+            if (StrToInt(result[i].str().c_str(), id, "poolId") != 0) {
+                return -1;
+            }
             if (id < 0) {
                 return -1;
             }
             info.poolId = (uint32_t)id;
         } else if (i == 3) {
-            info.storedSize = atof(result[i].str().c_str());
+            if (StrToDouble(result[i].str().c_str(), info.storedSize, "storedSize") != 0) {
+                return -1;
+            }
         } else if (i == 4) {
             info.storedSizeUnit = TransStrUnitToNum(result[i].str().c_str());
         } else if (i == 5) {
-            info.objectsNum = atof(result[i].str().c_str());
+            if (StrToDouble(result[i].str().c_str(), info.objectsNum, "objectsNum") != 0) {
+                return -1;
+            }
         } else if (i == 6) {
             if (result[i].length() == 0) {
                 info.numUnit = 1;
@@ -301,13 +354,19 @@ int32_t PoolUsageStat::ParseToRecordInfo(std::smatch& result, struct RecordInfo 
                 info.numUnit = 1024 * 1024;
             }
         } else if (i == 7) {
-            info.usedSize = atof(result[i].str().c_str());
+            if (StrToDouble(result[i].str().c_str(), info.usedSize, "usedSize") != 0) {
+                return -1;
+            }
         } else if (i == 8) {
             info.usedSizeUnit = TransStrUnitToNum(result[i].str().c_str());
         } else if (i == 9) {
-            info.useRatio = atof(result[i].str().c_str());
+            if (StrToDouble(result[i].str().c_str(), info.useRatio, "useRatio") != 0) {
+                return -1;
+            }
         } else if (i == 10) {
-            info.maxAvail = atof(result[i].str().c_str());
+            if (StrToDouble(result[i].str().c_str(), info.maxAvail, "maxAvail") != 0) {
+                return -1;
+            }
         } else if (i == 11) {
             info.maxAvailUnit = TransStrUnitToNum(result[i].str().c_str());
         }
@@ -426,16 +485,20 @@ static int GetPoolStorageUsage(PoolUsageStat *mgr, const char *input)
 {
     std::string pattern = poolNamePattern + poolIdPattern + storedPattern + objectsPattern + usedPattern +
 	                  usedRatioPattern + availPattern;
-
+    char *strs = nullptr;
     std::vector<string> infoVector;
-    char *strs = new char[strlen(input) + 1];
+    strs = new(std::nothrow) char[strlen(input) + 1];
+    if (strs == nullptr) {
+        ProxyDbgLogErr("malloc failed");
+        return -ENOMEM;
+    }
     strcpy(strs, input);
-
-    char *p = strtok(strs, "\n");
+    char *savep;
+    char *p = strtok_r(strs, "\n", &savep);
     while (p) {
         string s = p;
-	infoVector.push_back(s);
-	p = strtok(NULL, "\n");
+	    infoVector.push_back(s);
+	    p = strtok_r(nullptr, "\n", &savep);
     }
 
     for (size_t i = 0; i < infoVector.size(); i++) {
@@ -495,7 +558,7 @@ int32_t PoolUsageStat::UpdatePoolList(void)
 
 int PoolUsageStat::UpdatePoolUsage(void)
 {
-    librados::Rados *rados = reinterpret_cast<librados::Rados *>(proxy->radosClient);
+    librados::Rados *rados = static_cast<librados::Rados *>(proxy->radosClient);
     std::string cmd("{\"prefix\":\"df\"}");
     std::string outs;
     bufferlist inbl;
