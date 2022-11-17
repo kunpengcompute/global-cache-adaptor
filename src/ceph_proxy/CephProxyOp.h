@@ -100,7 +100,7 @@ public:
             size_t *bytesRead = nullptr;
         } read;
 
-        struct _readbl {
+        struct _readSgl {
 	    size_t len = 0;
 	    int buildType = 0;
             GcBufferList *bl = nullptr;

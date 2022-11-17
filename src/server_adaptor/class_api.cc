@@ -254,6 +254,7 @@ int cls_cxx_stat2(cls_method_context_t hctx, uint64_t *size, ceph::real_time *mt
 	op.rbdObjId.format = pOpReq->vecOps[pctx->opId].rbdObjId.format;
 	op.rbdObjId.poolId = pOpReq->vecOps[pctx->opId].rbdObjId.poolId;
 	op.objName = pOpReq->vecOps[pctx->opId].objName; // ptr->get_oid().name;
+	op.opFlags = 1;
 
 	vector<OSDOp> ops(1);
 	ops.swap(ptr->ops);
