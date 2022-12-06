@@ -1,5 +1,5 @@
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
-index 28ec9835..bf4aa6e8 100644
+index 28ec983..bf4aa6e 100644
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
 @@ -103,6 +103,11 @@ if(HAVE_INTEL)
@@ -40,7 +40,7 @@ index 28ec9835..bf4aa6e8 100644
  if(WITH_TESTS)
 diff --git a/src/client_adaptor/CMakeLists.txt b/src/client_adaptor/CMakeLists.txt
 new file mode 100644
-index 00000000..aba70f7e
+index 0000000..aba70f7
 --- /dev/null
 +++ b/src/client_adaptor/CMakeLists.txt
 @@ -0,0 +1,17 @@
@@ -63,7 +63,7 @@ index 00000000..aba70f7e
 +
 diff --git a/src/client_adaptor/ClientAdaptorMgr.cc b/src/client_adaptor/ClientAdaptorMgr.cc
 new file mode 100644
-index 00000000..f9ca79b1
+index 0000000..900be66
 --- /dev/null
 +++ b/src/client_adaptor/ClientAdaptorMgr.cc
 @@ -0,0 +1,256 @@
@@ -108,7 +108,7 @@ index 00000000..f9ca79b1
 +    return RET_OK;
 +}
 +
-+int32_t CcmNodeChangeNotify(NodeInfo *nodeList, uint32_t nodeNum, void *ctx) {
++int32_t CcmNodeChangeNotify(int32_t clusterId, NodeInfo *nodeList, uint32_t nodeNum, void *ctx) {
 +    if (nodeNum == 0) {
 +        return RET_OK;
 +    }
@@ -122,7 +122,7 @@ index 00000000..f9ca79b1
 +        return RET_OK;
 +    }
 +    Objecter *obj = static_cast<Objecter *>(ctx);
-+    obj->nodeview_change_retry_op_submit(available_nodes);
++    obj->nodeview_change_retry_op_submit(clusterId, available_nodes);
 +    return RET_OK;
 +}
 +
@@ -325,7 +325,7 @@ index 00000000..f9ca79b1
 +}
 diff --git a/src/client_adaptor/ClientAdaptorMgr.h b/src/client_adaptor/ClientAdaptorMgr.h
 new file mode 100644
-index 00000000..7ea053f0
+index 0000000..7ea053f
 --- /dev/null
 +++ b/src/client_adaptor/ClientAdaptorMgr.h
 @@ -0,0 +1,189 @@
@@ -520,7 +520,7 @@ index 00000000..7ea053f0
 +#endif
 diff --git a/src/client_adaptor/ClientAdaptorMsg.cc b/src/client_adaptor/ClientAdaptorMsg.cc
 new file mode 100644
-index 00000000..ee19bbd5
+index 0000000..ee19bbd
 --- /dev/null
 +++ b/src/client_adaptor/ClientAdaptorMsg.cc
 @@ -0,0 +1,348 @@
@@ -874,7 +874,7 @@ index 00000000..ee19bbd5
 +}
 diff --git a/src/client_adaptor/ClientAdaptorMsg.h b/src/client_adaptor/ClientAdaptorMsg.h
 new file mode 100644
-index 00000000..80afa785
+index 0000000..80afa78
 --- /dev/null
 +++ b/src/client_adaptor/ClientAdaptorMsg.h
 @@ -0,0 +1,87 @@
@@ -967,7 +967,7 @@ index 00000000..80afa785
 +#endif
 diff --git a/src/client_adaptor/ClientAdaptorPerf.cc b/src/client_adaptor/ClientAdaptorPerf.cc
 new file mode 100644
-index 00000000..cea78351
+index 0000000..cea7835
 --- /dev/null
 +++ b/src/client_adaptor/ClientAdaptorPerf.cc
 @@ -0,0 +1,85 @@
@@ -1058,7 +1058,7 @@ index 00000000..cea78351
 +}
 diff --git a/src/client_adaptor/ClientAdaptorPerf.h b/src/client_adaptor/ClientAdaptorPerf.h
 new file mode 100644
-index 00000000..f7ee5be5
+index 0000000..f7ee5be
 --- /dev/null
 +++ b/src/client_adaptor/ClientAdaptorPerf.h
 @@ -0,0 +1,55 @@
@@ -1119,7 +1119,7 @@ index 00000000..f7ee5be5
 +#endif
 diff --git a/src/client_adaptor/ClientAdaptorPlugin.cc b/src/client_adaptor/ClientAdaptorPlugin.cc
 new file mode 100644
-index 00000000..c44e3480
+index 0000000..c44e348
 --- /dev/null
 +++ b/src/client_adaptor/ClientAdaptorPlugin.cc
 @@ -0,0 +1,45 @@
@@ -1170,7 +1170,7 @@ index 00000000..c44e3480
 +}
 diff --git a/src/client_adaptor/ClientAdaptorPlugin.h b/src/client_adaptor/ClientAdaptorPlugin.h
 new file mode 100644
-index 00000000..fa7d71d2
+index 0000000..fa7d71d
 --- /dev/null
 +++ b/src/client_adaptor/ClientAdaptorPlugin.h
 @@ -0,0 +1,39 @@
@@ -1215,7 +1215,7 @@ index 00000000..fa7d71d2
 +#endif
 diff --git a/src/client_adaptor/open_ccm.h b/src/client_adaptor/open_ccm.h
 new file mode 100644
-index 00000000..50b8b372
+index 0000000..f5ff2a3
 --- /dev/null
 +++ b/src/client_adaptor/open_ccm.h
 @@ -0,0 +1,224 @@
@@ -1368,7 +1368,7 @@ index 00000000..50b8b372
 +/* NodeView callback */
 +typedef struct {
 +    void *ctx;
-+    int32_t (*notifyNodeChange)(NodeInfo *nodeList, uint32_t nodeNum, void *ctx);
++    int32_t (*notifyNodeChange)(int32_t clusterId, NodeInfo *nodeList, uint32_t nodeNum, void *ctx);
 +} NodeViewChangeOpHandle;
 +
 +/* PTView callback */
@@ -1446,7 +1446,7 @@ index 00000000..50b8b372
 \ No newline at end of file
 diff --git a/src/client_adaptor/open_das.h b/src/client_adaptor/open_das.h
 new file mode 100644
-index 00000000..6eac9f73
+index 0000000..6eac9f7
 --- /dev/null
 +++ b/src/client_adaptor/open_das.h
 @@ -0,0 +1,67 @@
@@ -1519,7 +1519,7 @@ index 00000000..6eac9f73
 +#endif // OPEN_DAS_H
 \ No newline at end of file
 diff --git a/src/common/options.cc b/src/common/options.cc
-index 8135ea8f..9d3bb781 100644
+index 8135ea8..9d3bb78 100644
 --- a/src/common/options.cc
 +++ b/src/common/options.cc
 @@ -1015,7 +1015,7 @@ std::vector<Option> get_global_options() {
@@ -1605,7 +1605,7 @@ index 8135ea8f..9d3bb781 100644
  }
  
 diff --git a/src/include/config-h.in.cmake b/src/include/config-h.in.cmake
-index d83a59b2..12dfdf5e 100644
+index d83a59b..12dfdf5 100644
 --- a/src/include/config-h.in.cmake
 +++ b/src/include/config-h.in.cmake
 @@ -187,6 +187,9 @@
@@ -1619,7 +1619,7 @@ index d83a59b2..12dfdf5e 100644
  #cmakedefine HAVE_BABELTRACE_BABELTRACE_H 1
  
 diff --git a/src/include/rados/librados.hpp b/src/include/rados/librados.hpp
-index 0c047c43..2b0ce9f2 100644
+index 0c047c4..2b0ce9f 100644
 --- a/src/include/rados/librados.hpp
 +++ b/src/include/rados/librados.hpp
 @@ -1247,6 +1247,9 @@ inline namespace v14_2_0 {
@@ -1645,7 +1645,7 @@ index 0c047c43..2b0ce9f2 100644
    private:
      /* You can only get IoCtx instances from Rados */
 diff --git a/src/include/rbd/librbd.h b/src/include/rbd/librbd.h
-index 83b5735c..e19a7bee 100644
+index 83b5735..e19a7be 100644
 --- a/src/include/rbd/librbd.h
 +++ b/src/include/rbd/librbd.h
 @@ -934,6 +934,16 @@ CEPH_RBD_API int64_t rbd_read_iterate(rbd_image_t image, uint64_t ofs, size_t le
@@ -1666,7 +1666,7 @@ index 83b5735c..e19a7bee 100644
   * get difference between two versions of an image
   *
 diff --git a/src/include/rbd/librbd.hpp b/src/include/rbd/librbd.hpp
-index 15eb9f56..10e82f41 100644
+index 15eb9f5..10e82f4 100644
 --- a/src/include/rbd/librbd.hpp
 +++ b/src/include/rbd/librbd.hpp
 @@ -542,6 +542,14 @@ public:
@@ -1693,7 +1693,7 @@ index 15eb9f56..10e82f41 100644
     * Drop any cached data for this image
     *
 diff --git a/src/librados/RadosClient.cc b/src/librados/RadosClient.cc
-index 902c2c66..6d86530d 100644
+index 902c2c6..6d86530 100644
 --- a/src/librados/RadosClient.cc
 +++ b/src/librados/RadosClient.cc
 @@ -52,6 +52,11 @@
@@ -1759,7 +1759,7 @@ index 902c2c66..6d86530d 100644
    return 0;
  }
 diff --git a/src/librados/librados_cxx.cc b/src/librados/librados_cxx.cc
-index bc3f65f2..69f02520 100644
+index bc3f65f..69f0252 100644
 --- a/src/librados/librados_cxx.cc
 +++ b/src/librados/librados_cxx.cc
 @@ -2976,3 +2976,18 @@ int librados::IoCtx::application_metadata_list(const std::string& app_name,
@@ -1782,7 +1782,7 @@ index bc3f65f2..69f02520 100644
 +
 +#endif
 diff --git a/src/librbd/ImageCtx.cc b/src/librbd/ImageCtx.cc
-index 8375d1a6..f79941e2 100644
+index 8375d1a..f79941e 100644
 --- a/src/librbd/ImageCtx.cc
 +++ b/src/librbd/ImageCtx.cc
 @@ -270,6 +270,18 @@ public:
@@ -1815,7 +1815,7 @@ index 8375d1a6..f79941e2 100644
      ASSIGN_OPTION(readahead_max_bytes, Option::size_t);
      ASSIGN_OPTION(readahead_disable_after_bytes, Option::size_t);
 diff --git a/src/librbd/ImageCtx.h b/src/librbd/ImageCtx.h
-index df5271e8..2e8d7f0c 100644
+index df5271e..2e8d7f0 100644
 --- a/src/librbd/ImageCtx.h
 +++ b/src/librbd/ImageCtx.h
 @@ -174,9 +174,9 @@ namespace librbd {
@@ -1831,7 +1831,7 @@ index df5271e8..2e8d7f0c 100644
      uint64_t readahead_max_bytes;
      uint64_t readahead_disable_after_bytes;
 diff --git a/src/librbd/Operations.cc b/src/librbd/Operations.cc
-index ffb8f5c8..f090917c 100644
+index ffb8f5c..f090917 100644
 --- a/src/librbd/Operations.cc
 +++ b/src/librbd/Operations.cc
 @@ -41,6 +41,11 @@
@@ -1922,7 +1922,7 @@ index ffb8f5c8..f090917c 100644
                               false);
      if (r < 0) {
 diff --git a/src/librbd/Types.h b/src/librbd/Types.h
-index 3f110447..e33023fb 100644
+index 3f11044..e33023f 100644
 --- a/src/librbd/Types.h
 +++ b/src/librbd/Types.h
 @@ -22,6 +22,14 @@ enum {
@@ -1941,7 +1941,7 @@ index 3f110447..e33023fb 100644
    l_librbd_discard_bytes,
    l_librbd_discard_latency,
 diff --git a/src/librbd/api/Image.cc b/src/librbd/api/Image.cc
-index 8f526f40..5f9aa774 100644
+index 8f526f4..5f9aa77 100644
 --- a/src/librbd/api/Image.cc
 +++ b/src/librbd/api/Image.cc
 @@ -20,6 +20,11 @@
@@ -1993,7 +1993,7 @@ index 8f526f40..5f9aa774 100644
    if (opts.get(RBD_IMAGE_OPTION_FLATTEN, &flatten) == 0) {
      opts.unset(RBD_IMAGE_OPTION_FLATTEN);
 diff --git a/src/librbd/image/PreRemoveRequest.cc b/src/librbd/image/PreRemoveRequest.cc
-index 3326c143..09a6d407 100644
+index 3326c14..09a6d40 100644
 --- a/src/librbd/image/PreRemoveRequest.cc
 +++ b/src/librbd/image/PreRemoveRequest.cc
 @@ -11,6 +11,11 @@
@@ -2048,7 +2048,7 @@ index 3326c143..09a6d407 100644
      } else {
        m_image_ctx->snap_lock.put_read();
 diff --git a/src/librbd/image/RemoveRequest.cc b/src/librbd/image/RemoveRequest.cc
-index 8e029f8b..3073a013 100644
+index 8e029f8..3073a01 100644
 --- a/src/librbd/image/RemoveRequest.cc
 +++ b/src/librbd/image/RemoveRequest.cc
 @@ -14,6 +14,10 @@
@@ -2157,7 +2157,7 @@ index 8e029f8b..3073a013 100644
  void RemoveRequest<I>::finish(int r) {
    ldout(m_cct, 20) << "r=" << r << dendl;
 diff --git a/src/librbd/image/RemoveRequest.h b/src/librbd/image/RemoveRequest.h
-index 98d59764..5b676357 100644
+index 98d5976..5b67635 100644
 --- a/src/librbd/image/RemoveRequest.h
 +++ b/src/librbd/image/RemoveRequest.h
 @@ -96,6 +96,10 @@ private:
@@ -2193,7 +2193,7 @@ index 98d59764..5b676357 100644
  };
  
 diff --git a/src/librbd/internal.cc b/src/librbd/internal.cc
-index 89b538d6..5d40f279 100644
+index 89b538d..5d40f27 100644
 --- a/src/librbd/internal.cc
 +++ b/src/librbd/internal.cc
 @@ -56,6 +56,11 @@
@@ -2365,7 +2365,7 @@ index 89b538d6..5d40f279 100644
  		   std::list<locker_t> *lockers,
  		   bool *exclusive,
 diff --git a/src/librbd/internal.h b/src/librbd/internal.h
-index 1e1864f3..b61c43f9 100644
+index 1e1864f..b61c43f 100644
 --- a/src/librbd/internal.h
 +++ b/src/librbd/internal.h
 @@ -98,6 +98,10 @@ namespace librbd {
@@ -2391,7 +2391,7 @@ index 1e1864f3..b61c43f9 100644
                   const vector<pair<uint64_t,uint64_t> >& image_extents);
  
 diff --git a/src/librbd/io/ImageDispatchSpec.h b/src/librbd/io/ImageDispatchSpec.h
-index 93c53a0f..7551fb0c 100644
+index 93c53a0..7551fb0 100644
 --- a/src/librbd/io/ImageDispatchSpec.h
 +++ b/src/librbd/io/ImageDispatchSpec.h
 @@ -121,7 +121,11 @@ public:
@@ -2408,7 +2408,7 @@ index 93c53a0f..7551fb0c 100644
    void fail(int r);
  
 diff --git a/src/librbd/io/ImageRequestWQ.cc b/src/librbd/io/ImageRequestWQ.cc
-index 34f2c2cf..cae0341a 100644
+index 34f2c2c..cae0341 100644
 --- a/src/librbd/io/ImageRequestWQ.cc
 +++ b/src/librbd/io/ImageRequestWQ.cc
 @@ -286,7 +286,13 @@ void ImageRequestWQ<I>::aio_read(AioCompletion *c, uint64_t off, uint64_t len,
@@ -2469,7 +2469,7 @@ index 34f2c2cf..cae0341a 100644
    ThreadPool::PointerWQ<ImageDispatchSpec<I> >::queue(req);
  }
 diff --git a/src/librbd/librbd.cc b/src/librbd/librbd.cc
-index 749f5cb5..996ae09a 100644
+index 749f5cb..996ae09 100644
 --- a/src/librbd/librbd.cc
 +++ b/src/librbd/librbd.cc
 @@ -2154,6 +2154,38 @@ namespace librbd {
@@ -2551,7 +2551,7 @@ index 749f5cb5..996ae09a 100644
  extern "C" int rbd_diff_iterate(rbd_image_t image,
  				const char *fromsnapname,
 diff --git a/src/librbd/operation/SnapshotCreateRequest.cc b/src/librbd/operation/SnapshotCreateRequest.cc
-index 66293609..60250b29 100644
+index 6629360..60250b2 100644
 --- a/src/librbd/operation/SnapshotCreateRequest.cc
 +++ b/src/librbd/operation/SnapshotCreateRequest.cc
 @@ -11,6 +11,11 @@
@@ -2739,7 +2739,7 @@ index 66293609..60250b29 100644
  void SnapshotCreateRequest<I>::send_release_snap_id() {
    I &image_ctx = this->m_image_ctx;
 diff --git a/src/librbd/operation/SnapshotCreateRequest.h b/src/librbd/operation/SnapshotCreateRequest.h
-index 406d2f01..ff04609c 100644
+index 406d2f0..ff04609 100644
 --- a/src/librbd/operation/SnapshotCreateRequest.h
 +++ b/src/librbd/operation/SnapshotCreateRequest.h
 @@ -31,26 +31,32 @@ public:
@@ -2850,7 +2850,7 @@ index 406d2f01..ff04609c 100644
    Context *handle_release_snap_id(int *result);
  
 diff --git a/src/librbd/operation/SnapshotRollbackRequest.cc b/src/librbd/operation/SnapshotRollbackRequest.cc
-index 596570a3..56ee1361 100644
+index 596570a..56ee136 100644
 --- a/src/librbd/operation/SnapshotRollbackRequest.cc
 +++ b/src/librbd/operation/SnapshotRollbackRequest.cc
 @@ -2,6 +2,8 @@
@@ -3072,7 +3072,7 @@ index 596570a3..56ee1361 100644
  void SnapshotRollbackRequest<I>::send_rollback_objects() {
    I &image_ctx = this->m_image_ctx;
 diff --git a/src/librbd/operation/SnapshotRollbackRequest.h b/src/librbd/operation/SnapshotRollbackRequest.h
-index e58a618f..2638e11a 100644
+index e58a618..2638e11 100644
 --- a/src/librbd/operation/SnapshotRollbackRequest.h
 +++ b/src/librbd/operation/SnapshotRollbackRequest.h
 @@ -83,6 +83,11 @@ private:
@@ -3109,7 +3109,7 @@ index e58a618f..2638e11a 100644
  };
  
 diff --git a/src/msg/Message.cc b/src/msg/Message.cc
-index d36a95eb..e5384c3e 100644
+index d36a95e..e5384c3 100644
 --- a/src/msg/Message.cc
 +++ b/src/msg/Message.cc
 @@ -202,6 +202,8 @@
@@ -3137,7 +3137,7 @@ index d36a95eb..e5384c3e 100644
    }
    trace.keyval("tid", get_tid());
 diff --git a/src/msg/async/AsyncConnection.cc b/src/msg/async/AsyncConnection.cc
-index cab4145d..98a69dd3 100644
+index cab4145..98a69dd 100644
 --- a/src/msg/async/AsyncConnection.cc
 +++ b/src/msg/async/AsyncConnection.cc
 @@ -360,8 +360,6 @@ void AsyncConnection::process() {
@@ -3181,7 +3181,7 @@ index cab4145d..98a69dd3 100644
        last_tick_id = center->create_time_event(inactive_timeout_us, tick_handler);
      }
 diff --git a/src/msg/async/AsyncConnection.h b/src/msg/async/AsyncConnection.h
-index 5b914cc5..301cc892 100644
+index 5b914cc..301cc89 100644
 --- a/src/msg/async/AsyncConnection.h
 +++ b/src/msg/async/AsyncConnection.h
 @@ -136,6 +136,16 @@ class AsyncConnection : public Connection {
@@ -3214,7 +3214,7 @@ index 5b914cc5..301cc892 100644
    uint64_t state_offset;
    Worker *worker;
 diff --git a/src/msg/async/ProtocolV2.cc b/src/msg/async/ProtocolV2.cc
-index 4b03f5eb..4b05d5c8 100644
+index 4b03f5e..4b05d5c 100644
 --- a/src/msg/async/ProtocolV2.cc
 +++ b/src/msg/async/ProtocolV2.cc
 @@ -13,6 +13,12 @@
@@ -3357,7 +3357,7 @@ index 4b03f5eb..4b05d5c8 100644
    session_stream_handlers = \
      ceph::crypto::onwire::rxtx_t::create_handler_pair(cct, *auth_meta, false);
 diff --git a/src/osdc/Objecter.cc b/src/osdc/Objecter.cc
-index bc39114a..c20331c2 100644
+index bc39114..42aa21d 100644
 --- a/src/osdc/Objecter.cc
 +++ b/src/osdc/Objecter.cc
 @@ -51,6 +51,18 @@
@@ -4019,14 +4019,15 @@ index bc39114a..c20331c2 100644
    op->session->con->send_message(m);
  }
  
-@@ -3326,6 +3830,141 @@ int Objecter::take_linger_budget(LingerOp *info)
+@@ -3326,6 +3830,144 @@ int Objecter::take_linger_budget(LingerOp *info)
    return 1;
  }
  
 +#ifdef WITH_GLOBAL_CACHE
-+void Objecter::nodeview_change_retry_op_submit(set<uint32_t> available_nodes)
++void Objecter::nodeview_change_retry_op_submit(int32_t clusterId, set<uint32_t> available_nodes)
 +{
-+    ldout(cct, 3) << "Enter NodeView Change Retry OP Submit. available_nodes=" << available_nodes << dendl;
++    ldout(cct, 3) << "Enter NodeView Change Retry OP Submit. clusterId=" << clusterId
++      << " available_nodes=" << available_nodes << dendl;
 +    map<ceph_tid_t, Op *> need_resend;
 +    PluginRegistry *reg = cct->get_plugin_registry();
 +    auto plugin = static_cast<ClientAdaptorPlugin *>(reg->get_with_load("global_cache", "client_adaptor_plugin"));
@@ -4036,7 +4037,9 @@ index bc39114a..c20331c2 100644
 +        OSDSession *s = p->second;
 +        int osd = p->first;
 +        ldout(cct, 3) << "NodeView Change osd=" << osd << " ops=" << s->ops << dendl;
-+        if (!(osd >> 20) || available_nodes.find((osd & 0xFFFF) >> 4) != available_nodes.end()) {
++        if (!check_osd_value(osd) ||
++            get_clusterId_from_osd(osd) != clusterId ||
++            available_nodes.find((osd & 0xFFFF) >> 4) != available_nodes.end()) {
 +            ++p;
 +            continue;
 +        }
@@ -4161,7 +4164,7 @@ index bc39114a..c20331c2 100644
  /* This function DOES put the passed message before returning */
  void Objecter::handle_osd_op_reply(MOSDOpReply *m)
  {
-@@ -3348,7 +3987,11 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
+@@ -3348,7 +3990,11 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
      m->put();
      return;
    }
@@ -4174,7 +4177,7 @@ index bc39114a..c20331c2 100644
    OSDSession::unique_lock sl(s->lock);
  
    map<ceph_tid_t, Op *>::iterator iter = s->ops.find(tid);
-@@ -3406,7 +4049,6 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
+@@ -3406,7 +4052,6 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
    Context *onfinish = 0;
  
    int rc = m->get_result();
@@ -4182,7 +4185,7 @@ index bc39114a..c20331c2 100644
    if (m->is_redirect_reply()) {
      ldout(cct, 5) << " got redirect reply; redirecting" << dendl;
      if (op->onfinish)
-@@ -3438,13 +4080,58 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
+@@ -3438,13 +4083,58 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
      op->target.flags &= ~(CEPH_OSD_FLAG_BALANCE_READS |
  			  CEPH_OSD_FLAG_LOCALIZE_READS);
      op->target.pgid = pg_t();
@@ -4241,7 +4244,7 @@ index bc39114a..c20331c2 100644
    if (op->objver)
      *op->objver = m->get_user_version();
    if (op->reply_epoch)
-@@ -4399,6 +5086,53 @@ bool Objecter::ms_handle_reset(Connection *con)
+@@ -4399,6 +5089,53 @@ bool Objecter::ms_handle_reset(Connection *con)
      if (session) {
        ldout(cct, 1) << "ms_handle_reset " << con << " session " << session
  		    << " osd." << session->osd << dendl;
@@ -4296,10 +4299,55 @@ index bc39114a..c20331c2 100644
        // says the osd down
        if (!(initialized && osdmap->is_up(session->osd))) {
 diff --git a/src/osdc/Objecter.h b/src/osdc/Objecter.h
-index ca8d85f7..a3ba467a 100644
+index ca8d85f..89019e8 100644
 --- a/src/osdc/Objecter.h
 +++ b/src/osdc/Objecter.h
-@@ -1232,7 +1232,17 @@ public:
+@@ -258,7 +258,14 @@ struct ObjectOperation {
+     }
+   };
+   void stat(uint64_t *psize, ceph::real_time *pmtime, int *prval) {
++#ifdef WITH_GLOBAL_CACHE
++    OSDOp& osd_op = add_op(CEPH_OSD_OP_STAT);
++    if (!psize) {
++        osd_op.op.flags = 1;
++    }
++#else
+     add_op(CEPH_OSD_OP_STAT);
++#endif
+     unsigned p = ops.size() - 1;
+     C_ObjectOperation_stat *h = new C_ObjectOperation_stat(psize, pmtime, NULL, NULL,
+ 							   prval);
+@@ -267,7 +274,14 @@ struct ObjectOperation {
+     out_rval[p] = prval;
+   }
+   void stat(uint64_t *psize, time_t *ptime, int *prval) {
++#ifdef WITH_GLOBAL_CACHE
++    OSDOp& osd_op = add_op(CEPH_OSD_OP_STAT);
++    if (!psize) {
++        osd_op.op.flags = 1;
++    }
++#else
+     add_op(CEPH_OSD_OP_STAT);
++#endif
+     unsigned p = ops.size() - 1;
+     C_ObjectOperation_stat *h = new C_ObjectOperation_stat(psize, NULL, ptime, NULL,
+ 							   prval);
+@@ -276,7 +290,14 @@ struct ObjectOperation {
+     out_rval[p] = prval;
+   }
+   void stat(uint64_t *psize, struct timespec *pts, int *prval) {
++#ifdef WITH_GLOBAL_CACHE
++    OSDOp& osd_op = add_op(CEPH_OSD_OP_STAT);
++    if (!psize) {
++        osd_op.op.flags = 1;
++    }
++#else
+     add_op(CEPH_OSD_OP_STAT);
++#endif
+     unsigned p = ops.size() - 1;
+     C_ObjectOperation_stat *h = new C_ObjectOperation_stat(psize, NULL, NULL, pts,
+ 							   prval);
+@@ -1232,7 +1253,17 @@ public:
    void maybe_request_map();
  
    void enable_blacklist_events();
@@ -4317,7 +4365,7 @@ index ca8d85f7..a3ba467a 100644
  
    void _maybe_request_map();
  
-@@ -1341,7 +1351,13 @@ public:
+@@ -1341,7 +1372,13 @@ public:
      int incarnation;
  
      op_target_t target;
@@ -4332,7 +4380,7 @@ index ca8d85f7..a3ba467a 100644
      ConnectionRef con;  // for rx buffer only
      uint64_t features;  // explicitly specified op features
  
-@@ -1863,9 +1879,32 @@ public:
+@@ -1863,9 +1900,32 @@ public:
  
    bool osdmap_full_flag() const;
    bool osdmap_pool_full(const int64_t pool_id) const;
@@ -4348,10 +4396,10 @@ index ca8d85f7..a3ba467a 100644
 +  };
 +
 +  RetryOp retry_op;
- 
-+  void retry_op_submit(vector<uint32_t> ready_pt_id);
 +
-+  void nodeview_change_retry_op_submit(set<uint32_t> available_nodes);
++  void retry_op_submit(vector<uint32_t> ready_pt_id);
+ 
++  void nodeview_change_retry_op_submit(int32_t clusterId, set<uint32_t> available_nodes);
 +
 +  bool gc_perf;
 +#endif
@@ -4365,7 +4413,7 @@ index ca8d85f7..a3ba467a 100644
    /**
     * Test pg_pool_t::FLAG_FULL on a pool
     *
-@@ -2057,6 +2096,34 @@ private:
+@@ -2057,6 +2117,34 @@ private:
      return std::forward<Callback>(cb)(*osdmap, std::forward<Args>(args)...);
    }
  
@@ -4400,8 +4448,20 @@ index ca8d85f7..a3ba467a 100644
  
    /**
     * Tell the objecter to throttle outgoing ops according to its
+@@ -2395,6 +2483,11 @@ public:
+     vector<OSDOp> ops;
+     int i = init_ops(ops, 1, extra_ops);
+     ops[i].op.op = CEPH_OSD_OP_STAT;
++#ifdef WITH_GLOBAL_CACHE
++    if (!psize) {
++        ops[i].op.flags = 1;
++    }
++#endif
+     C_Stat *fin = new C_Stat(psize, pmtime, onfinish);
+     Op *o = new Op(oid, oloc, ops, flags | global_op_flags |
+ 		   CEPH_OSD_FLAG_READ, fin, objver);
 diff --git a/src/test/CMakeLists.txt b/src/test/CMakeLists.txt
-index 5dcee169..fc342ccb 100644
+index 5dcee16..fc342cc 100644
 --- a/src/test/CMakeLists.txt
 +++ b/src/test/CMakeLists.txt
 @@ -31,6 +31,13 @@ add_subdirectory(fs)
@@ -4420,7 +4480,7 @@ index 5dcee169..fc342ccb 100644
    add_subdirectory(libradosstriper)
 diff --git a/src/test/ClientAdaptorTest/CMakeLists.txt b/src/test/ClientAdaptorTest/CMakeLists.txt
 new file mode 100644
-index 00000000..2eb494c3
+index 0000000..2eb494c
 --- /dev/null
 +++ b/src/test/ClientAdaptorTest/CMakeLists.txt
 @@ -0,0 +1,11 @@
@@ -4437,7 +4497,7 @@ index 00000000..2eb494c3
 +message(STATUS "Client adaptor test cmake executing...")
 diff --git a/src/test/ClientAdaptorTest/ClientAdaptorTest.cc b/src/test/ClientAdaptorTest/ClientAdaptorTest.cc
 new file mode 100644
-index 00000000..2661c627
+index 0000000..2661c62
 --- /dev/null
 +++ b/src/test/ClientAdaptorTest/ClientAdaptorTest.cc
 @@ -0,0 +1,412 @@
@@ -4855,7 +4915,7 @@ index 00000000..2661c627
 +);  
 diff --git a/src/test/ServerAdaptorSimulate/CMakeLists.txt b/src/test/ServerAdaptorSimulate/CMakeLists.txt
 new file mode 100644
-index 00000000..547e1dd9
+index 0000000..547e1dd
 --- /dev/null
 +++ b/src/test/ServerAdaptorSimulate/CMakeLists.txt
 @@ -0,0 +1,9 @@
@@ -4870,7 +4930,7 @@ index 00000000..547e1dd9
 +)
 diff --git a/src/test/ServerAdaptorSimulate/global_cache_dispatcher.cc b/src/test/ServerAdaptorSimulate/global_cache_dispatcher.cc
 new file mode 100644
-index 00000000..baa2d885
+index 0000000..baa2d88
 --- /dev/null
 +++ b/src/test/ServerAdaptorSimulate/global_cache_dispatcher.cc
 @@ -0,0 +1,150 @@
@@ -5026,7 +5086,7 @@ index 00000000..baa2d885
 +}    // nothing
 diff --git a/src/test/ServerAdaptorSimulate/global_cache_dispatcher.h b/src/test/ServerAdaptorSimulate/global_cache_dispatcher.h
 new file mode 100644
-index 00000000..b2ce4390
+index 0000000..b2ce439
 --- /dev/null
 +++ b/src/test/ServerAdaptorSimulate/global_cache_dispatcher.h
 @@ -0,0 +1,108 @@
@@ -5140,7 +5200,7 @@ index 00000000..b2ce4390
 +
 diff --git a/src/test/ServerAdaptorSimulate/global_cache_server.cc b/src/test/ServerAdaptorSimulate/global_cache_server.cc
 new file mode 100644
-index 00000000..486825aa
+index 0000000..486825a
 --- /dev/null
 +++ b/src/test/ServerAdaptorSimulate/global_cache_server.cc
 @@ -0,0 +1,131 @@
@@ -5276,7 +5336,7 @@ index 00000000..486825aa
 +    return r;
 +}
 diff --git a/src/test/librbd/io/test_mock_ImageRequestWQ.cc b/src/test/librbd/io/test_mock_ImageRequestWQ.cc
-index 50daa83c..209740a8 100644
+index 50daa83..209740a 100644
 --- a/src/test/librbd/io/test_mock_ImageRequestWQ.cc
 +++ b/src/test/librbd/io/test_mock_ImageRequestWQ.cc
 @@ -58,6 +58,11 @@ struct ImageDispatchSpec<librbd::MockTestImageCtx> {
@@ -5292,7 +5352,7 @@ index 50daa83c..209740a8 100644
    MOCK_CONST_METHOD0(start_op, void());
    MOCK_CONST_METHOD0(send, void());
 diff --git a/src/test/librbd/operation/test_mock_SnapshotRollbackRequest.cc b/src/test/librbd/operation/test_mock_SnapshotRollbackRequest.cc
-index 1727180e..ec72706d 100644
+index 1727180..ec72706 100644
 --- a/src/test/librbd/operation/test_mock_SnapshotRollbackRequest.cc
 +++ b/src/test/librbd/operation/test_mock_SnapshotRollbackRequest.cc
 @@ -11,6 +11,8 @@
@@ -5375,7 +5435,7 @@ index 1727180e..ec72706d 100644
    void expect_block_writes(MockOperationImageCtx &mock_image_ctx, int r) {
      EXPECT_CALL(*mock_image_ctx.io_work_queue, block_writes(_))
 diff --git a/src/test/messenger/simple_client.cc b/src/test/messenger/simple_client.cc
-index ba7ed2b0..8b1eee76 100644
+index ba7ed2b..8b1eee7 100644
 --- a/src/test/messenger/simple_client.cc
 +++ b/src/test/messenger/simple_client.cc
 @@ -30,6 +30,7 @@ using namespace std;
@@ -5464,7 +5524,7 @@ index ba7ed2b0..8b1eee76 100644
  
  	// do stuff
 diff --git a/src/test/messenger/simple_dispatcher.cc b/src/test/messenger/simple_dispatcher.cc
-index b13958d3..7e1011bb 100644
+index b13958d..7e1011b 100644
 --- a/src/test/messenger/simple_dispatcher.cc
 +++ b/src/test/messenger/simple_dispatcher.cc
 @@ -17,6 +17,8 @@
@@ -5524,7 +5584,7 @@ index b13958d3..7e1011bb 100644
    //m->put();
  
 diff --git a/src/test/messenger/simple_server.cc b/src/test/messenger/simple_server.cc
-index 8b85f3af..34feff15 100644
+index 8b85f3a..34feff1 100644
 --- a/src/test/messenger/simple_server.cc
 +++ b/src/test/messenger/simple_server.cc
 @@ -28,6 +28,8 @@ using namespace std;
@@ -5579,7 +5639,7 @@ index 8b85f3af..34feff15 100644
  
  	// done
 diff --git a/src/tools/rbd/action/Snap.cc b/src/tools/rbd/action/Snap.cc
-index 70cf62da..4a1c8430 100644
+index 70cf62d..4a1c843 100644
 --- a/src/tools/rbd/action/Snap.cc
 +++ b/src/tools/rbd/action/Snap.cc
 @@ -12,6 +12,10 @@
@@ -5825,7 +5885,7 @@ index 70cf62da..4a1c8430 100644
    if (r < 0) {
      std::cerr << "rbd: renaming snap failed: " << cpp_strerror(r)
 diff --git a/src/vstart.sh b/src/vstart.sh
-index 37aa28b7..a146de36 100644
+index 37aa28b..a146de3 100644
 --- a/src/vstart.sh
 +++ b/src/vstart.sh
 @@ -752,6 +752,8 @@ EOF

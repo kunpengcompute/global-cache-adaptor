@@ -32,6 +32,8 @@
 #define DEFAULT_MSGR_NUM	3
 #define DEFAULT_BIND_CORE	0
 
+#define CONFIG_BUFFSIZE 500
+
 #define MAX_CPU_NUM (256)
 
 static const char *RADOS_MON_OP_TIMEOUT	= "rados_mon_op_timeout";

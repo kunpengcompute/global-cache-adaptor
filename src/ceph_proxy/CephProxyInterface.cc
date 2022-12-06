@@ -12,8 +12,7 @@
 #include <string>
 #include <time.h>
 
-int CephProxyInit(const char *conf, size_t wNum, const char *log,
-	         ceph_proxy_t *proxy)
+int CephProxyInit(const char *conf, size_t wNum, const char *log, ceph_proxy_t *proxy)
 {
     int ret = 0;
 	if (conf == nullptr || log == nullptr || proxy == nullptr) {
@@ -199,7 +198,8 @@ int CephProxyWriteOpInit2(ceph_proxy_op_t *op, const int64_t poolId, const char*
 	return 0;
 }
 
-void CephProxyWriteOpRelease(ceph_proxy_op_t op) {
+void CephProxyWriteOpRelease(ceph_proxy_op_t op)
+{
 	RadosWriteOpRelease(op);
 }
 
@@ -218,26 +218,24 @@ void CephProxyWriteOpAssertVersion(ceph_proxy_op_t op, uint64_t ver)
 	RadosWriteOpAssertVersion(op, ver);
 }
 
-void CephProxyWriteOpCmpext(ceph_proxy_op_t op, const char *cmpBuf,
-	       			size_t cmpLen, uint64_t off, int *prval)
+void CephProxyWriteOpCmpext(ceph_proxy_op_t op, const char *cmpBuf,	size_t cmpLen, uint64_t off, int *prval)
 {
 	RadosWriteOpCmpext(op, cmpBuf, cmpLen, off ,prval);
 }
 
-void CephProxyWriteOpCmpXattr(ceph_proxy_op_t op,  const char *name, 
-		uint8_t compOperator, const char *value, size_t valLen)
+void CephProxyWriteOpCmpXattr(ceph_proxy_op_t op,  const char *name, uint8_t compOperator, const char *value,
+	size_t valLen)
 {
 	RadosWriteOpCmpXattr(op, name ,compOperator, value, valLen);
 }
 
-void CephProxyWriteOpOmapCmp(ceph_proxy_op_t op, const char *key, uint8_t compOperator, 
-				const char *value, size_t valLen, int *prval)
+void CephProxyWriteOpOmapCmp(ceph_proxy_op_t op, const char *key, uint8_t compOperator, const char *value,
+	size_t valLen, int *prval)
 {
 	RadosWriteOpOmapCmp(op, key, compOperator, value, valLen, prval);
 }
 
-void CephProxyWriteOpSetXattr(ceph_proxy_op_t op, const char *name, 
-				const char *value, size_t valLen)
+void CephProxyWriteOpSetXattr(ceph_proxy_op_t op, const char *name, const char *value, size_t valLen)
 {
 	RadosWriteOpSetXattr(op, name, value, valLen);
 }
@@ -257,7 +255,8 @@ void CephProxyWriteOpWrite(ceph_proxy_op_t op, const char *buffer, size_t len, u
 	RadosWriteOpWrite(op, buffer, len, off);
 }
 
-void CephProxyWriteOpWriteBl(ceph_proxy_op_t op, void *s, size_t len1, uint64_t off, AlignBuffer *alignBuffer, int isRelease)
+void CephProxyWriteOpWriteBl(ceph_proxy_op_t op, void *s, size_t len1, uint64_t off, AlignBuffer *alignBuffer,
+	int isRelease)
 {
 	RadosWriteOpWriteBl(op, static_cast<GcBufferList *>(s), len1, off, alignBuffer, isRelease);
 }
@@ -267,8 +266,8 @@ void CephProxyWriteOpRemove(ceph_proxy_op_t op)
 	RadosWriteOpRemove(op);
 }
 
-void CephProxyWriteOpOmapSet(ceph_proxy_op_t op, char const* const* keys, 
-			char const* const* vals, const size_t *lens, size_t num)
+void CephProxyWriteOpOmapSet(ceph_proxy_op_t op, char const* const* keys, char const* const* vals,
+	const size_t *lens, size_t num)
 {
 	RadosWriteOpOmapSet(op, keys, vals, lens, num);
 }
@@ -283,8 +282,8 @@ void CephProxyWriteOpOmapClear(ceph_proxy_op_t op)
 	RadosWriteOpOmapClear(op);
 }
 
-void CephProxyWriteOpSetAllocHint(ceph_proxy_op_t op, uint64_t expectedObjSize,
-	       		uint64_t expectedWriteSize, uint32_t flags)
+void CephProxyWriteOpSetAllocHint(ceph_proxy_op_t op, uint64_t expectedObjSize, uint64_t expectedWriteSize,
+	uint32_t flags)
 {
 	RadosWriteOpSetAllocHint(op, expectedObjSize, expectedWriteSize, flags);
 }
@@ -324,14 +323,13 @@ void CephProxyReadOpAssertVersion(ceph_proxy_op_t op, uint64_t ver)
 	RadosReadOpAssertVersion(op, ver);
 }
 
-void CephProxyReadOpCmpext(ceph_proxy_op_t op, const char *cmpBuf, 
-			size_t cmpLen, uint64_t off, int *prval)
+void CephProxyReadOpCmpext(ceph_proxy_op_t op, const char *cmpBuf, size_t cmpLen, uint64_t off, int *prval)
 {
 	RadosReadOpCmpext(op, cmpBuf, cmpLen, off, prval);
 }
 
-void CephProxyReadOpCmpXattr(ceph_proxy_op_t op,  const char *name, 
-		uint8_t compOperator, const char *value, size_t valueLen)
+void CephProxyReadOpCmpXattr(ceph_proxy_op_t op,  const char *name, uint8_t compOperator, const char *value,
+	size_t valueLen)
 {
 	RadosReadOpCmpXattr(op, name, compOperator, value, valueLen);
 }
@@ -341,8 +339,8 @@ void CephProxyReadOpGetXattrs(ceph_proxy_op_t op, proxy_xattrs_iter_t *iter, int
 	RadosReadOpGetXattrs(op, iter, prval);
 }
 
-void CephProxyReadOpOmapCmp(ceph_proxy_op_t op, const char *key, 
-		uint8_t compOperator, const char *val, size_t valLen, int *prval)
+void CephProxyReadOpOmapCmp(ceph_proxy_op_t op, const char *key, uint8_t compOperator, const char *val, size_t valLen,
+	int *prval)
 {
 	RadosReadOpOmapCmp(op, key, compOperator, val, valLen, prval);
 }
@@ -352,8 +350,7 @@ void CephProxyReadOpStat(ceph_proxy_op_t op, uint64_t *psize, time_t *pmtime, in
 	RadosReadOpStat(op, psize, pmtime, prval);
 }
 
-void CephProxyReadOpRead(ceph_proxy_op_t op, uint64_t offset, size_t len, 
-			char *buffer, size_t *bytesRead, int *prval)
+void CephProxyReadOpRead(ceph_proxy_op_t op, uint64_t offset, size_t len, char *buffer, size_t *bytesRead, int *prval)
 {
 	RadosReadOpRead(op, offset, len, buffer, bytesRead, prval);
 }
@@ -363,19 +360,19 @@ void CephProxyReadOpReadBl(ceph_proxy_op_t op, uint64_t offset, size_t len, void
 	RadosReadOpReadBl(op, offset, len , static_cast<GcBufferList *>(s), prval, isRelease);
 }
 
-void CephProxyReadOpCheckSum(ceph_proxy_op_t op, proxy_checksum_type_t type, 
-			const char *initValue, size_t initValueLen, 
-			uint64_t offset, size_t len, size_t chunkSize, char *pCheckSum,
-		       	size_t CheckSumLen, int *prval) 
+void CephProxyReadOpCheckSum(ceph_proxy_op_t op, proxy_checksum_type_t type, const char *initValue, size_t initValueLen, 
+	uint64_t offset, size_t len, size_t chunkSize, char *pCheckSum, size_t CheckSumLen, int *prval) 
 {
 	RadosReadOpCheckSum(op ,type,  initValue, initValueLen, offset, len, chunkSize, pCheckSum, CheckSumLen, prval);
 }
 
-completion_t CephProxyCreateCompletion(CallBack_t fn, void *arg) {
+completion_t CephProxyCreateCompletion(CallBack_t fn, void *arg)
+{
 	return CompletionInit(fn, arg);
 }
 
-void CephProxyCompletionDestroy(completion_t c) {
+void CephProxyCompletionDestroy(completion_t c)
+{
 	CompletionDestroy(c);
 }
 

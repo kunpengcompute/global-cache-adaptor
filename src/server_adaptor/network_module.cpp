@@ -506,7 +506,7 @@ void NetworkModule::OpHandlerThread(int threadNum, int coreId)
                     GetReadBWCas(opreq->optionLength);
                 }
                 while (copyupFlag.load() == 1) {
-                    usleep(20 * SA_THOUSAND_DEC);
+                    usleep(50);
                 }
                 if (unlikely(opreq->exitsCopyUp == 1)) {
                     SaDatalog("exists copyup, set copyupFlag, tid=%ld", opreq->tid);
@@ -536,7 +536,7 @@ void NetworkModule::OpHandlerThread(int threadNum, int coreId)
                 sleep(1);
                 ceph_assert("Lock queue mutex catch std::exception 2" == nullptr);
             }
-            sa->FtdsEndHigt(SA_FTDS_LOCK_ONE, "SA_FTDS_OP_LIFE", lockTsOne, 0);
+            sa->FtdsEndHigt(SA_FTDS_LOCK_ONE, "SA_FTDS_LOCK_ONE", lockTsOne, 0);
             continue;
         }
     try {
