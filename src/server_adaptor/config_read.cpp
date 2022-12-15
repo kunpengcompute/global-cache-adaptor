@@ -119,7 +119,7 @@ static int32_t ReadConfig()
 		std::cerr << "config get config para [unit:communicate, key:public_ipv4_addr] failed.\n";
 		return RETURN_ERROR;
 	}
-	ret = GetCfgItemCstr(g_SaClusterControlCfg.listenPort, MAX_IPV4_ADDR_LEN, "communicate", "local_port");
+	ret = GetCfgItemCstr(g_SaClusterControlCfg.listenPort, MAX_PORT_SIZE, "communicate", "local_port");
 	if (ret != RETURN_OK) {
 		std::cerr << "config get config para [unit:communicate, key:public_ipv4_addr] failed.\n";
 		return RETURN_ERROR;
