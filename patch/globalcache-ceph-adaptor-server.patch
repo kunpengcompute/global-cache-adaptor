@@ -1,0 +1,734 @@
+diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/CMakeLists.txt cephmod/ceph-14.2.8/CMakeLists.txt
+--- cephnew/ceph-14.2.8/CMakeLists.txt	2020-03-03 01:49:20.000000000 +0800
++++ cephmod/ceph-14.2.8/CMakeLists.txt	2022-12-15 16:07:09.633585300 +0800
+@@ -3,6 +3,8 @@
+ project(ceph CXX C ASM)
+ set(VERSION 14.2.8)
+ 
++link_directories(/opt/gcache_adaptor_compile/third_part/lib/)
++include_directories(/opt/gcache_adaptor_compile/third_part/inc/)
+ if(POLICY CMP0028)
+   cmake_policy(SET CMP0028 NEW)
+ endif()
+diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/do_cmake.sh cephmod/ceph-14.2.8/do_cmake.sh
+--- cephnew/ceph-14.2.8/do_cmake.sh	2020-03-03 01:49:20.000000000 +0800
++++ cephmod/ceph-14.2.8/do_cmake.sh	2022-12-15 16:08:00.830663600 +0800
+@@ -44,7 +44,7 @@
+ else
+     CMAKE=cmake
+ fi
+-${CMAKE} -DCMAKE_BUILD_TYPE=Debug $ARGS "$@" .. || exit 1
++${CMAKE} -DCMAKE_BUILD_TYPE=RelWithDebInfo $ARGS "$@" .. || exit 1
+ 
+ # minimal config to find plugins
+ cat <<EOF > ceph.conf
+diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/CMakeLists.txt cephmod/ceph-14.2.8/src/CMakeLists.txt
+--- cephnew/ceph-14.2.8/src/CMakeLists.txt	2020-03-03 01:49:20.000000000 +0800
++++ cephmod/ceph-14.2.8/src/CMakeLists.txt	2022-12-15 20:47:58.511232300 +0800
+@@ -394,10 +394,10 @@
+ endif()
+ 
+ add_library(common STATIC ${ceph_common_objs})
+-target_link_libraries(common ${ceph_common_deps})
++target_link_libraries(common ${ceph_common_deps} -lagent_server_lib -lssl -lcert -ldplog -ldposax -lconfparser -lmxml -lkmcext -lkmc -lsdp)
+ 
+ add_library(ceph-common SHARED ${ceph_common_objs})
+-target_link_libraries(ceph-common ${ceph_common_deps})
++target_link_libraries(ceph-common ${ceph_common_deps} -lagent_server_lib -lssl -lcert -ldplog -ldposax -lconfparser -lmxml -lkmcext -lkmc -lsdp)
+ # appease dpkg-shlibdeps
+ set_target_properties(ceph-common PROPERTIES
+   SOVERSION 0
+diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/cert_ceph.h cephmod/ceph-14.2.8/src/msg/async/cert_ceph.h
+--- cephnew/ceph-14.2.8/src/msg/async/cert_ceph.h	1970-01-01 08:00:00.000000000 +0800
++++ cephmod/ceph-14.2.8/src/msg/async/cert_ceph.h	2022-12-15 20:46:59.533438700 +0800
+@@ -0,0 +1,63 @@
++/*
++Copyright (c) 2021 Huawei Technologies Co., Ltd All rights reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++	http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++ 
++#ifndef _CERT_CEPH_H_
++#define _CERT_CEPH_H_
++
++#include <openssl/ssl.h>
++#include <openssl/err.h>
++#include <openssl/x509.h>
++#include <openssl/pem.h>
++#include <openssl/evp.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#define MAX_CIPHER_NAME 50
++
++typedef struct certParam {
++    int8_t tlsStatus;
++    int32_t tlsVersion;
++    char tlsCipherList[MAX_CIPHER_NAME];
++    char caFilePath[PATH_MAX];
++    char keypassFilePath[PATH_MAX];
++    char agentCertFilePath[PATH_MAX];
++    char publicKeyFilePath[PATH_MAX];
++    char privateKeyFilePath[PATH_MAX];
++    char revokeCrlFilePath[PATH_MAX];
++    char kmcPrimaryKsfPath[PATH_MAX];
++    char kmcStandbyKsfPath[PATH_MAX];
++    int32_t maxConnect;
++    int32_t portIdStart;
++    int32_t portIdEnd;
++    int32_t certCheckPeriodDays;
++    int32_t certCheckWarnningDays;
++} certParam_t;
++
++int32_t certParamInit(certParam_t *param);
++int32_t checkCertTask(certParam_t *param);
++int32_t sslctxInit(certParam_t *param, SSL_CTX **ctx);
++int32_t backgroundCertMonitorInit(certParam_t *param);
++int32_t CheckIpIsInTrustList(const char *ipAddress);
++
++#define MAX_CONNECT_COUNT 40960
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif
+diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc cephmod/ceph-14.2.8/src/msg/async/PosixStack.cc
+--- cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc	2020-03-03 01:49:20.000000000 +0800
++++ cephmod/ceph-14.2.8/src/msg/async/PosixStack.cc	2022-12-15 20:50:58.128015400 +0800
+@@ -13,7 +13,6 @@
+  * Foundation.  See file COPYING.
+  *
+  */
+-
+ #include <sys/socket.h>
+ #include <netinet/tcp.h>
+ #include <netinet/in.h>
+@@ -33,10 +32,254 @@
+ #include "include/compat.h"
+ #include "include/sock_compat.h"
+ 
++
++#define RETRY_TIME 10000
++#define MAX_VERIFY_DEPTH 10
++
+ #define dout_subsys ceph_subsys_ms
+ #undef dout_prefix
+ #define dout_prefix *_dout << "PosixStack "
+ 
++
++class TlsPosixConnectedSocketImpl final : public ConnectedSocketImpl {
++  NetHandler &handler;
++  int _fd;
++  entity_addr_t sa;
++  bool connected;
++  SSL *ssl;
++  bool is_server;
++  CephContext *cct;
++  bool has_handShaked;
++  bool is_handShaked;
++  int retry_count;
++ public:
++  explicit TlsPosixConnectedSocketImpl(NetHandler &h, const entity_addr_t &sa, int f, bool connected, SSL *ssl, bool is_server, CephContext *cct, bool is_handShaked)
++   : handler(h), _fd(f), sa(sa), connected(connected), ssl(ssl), is_server(is_server), cct (cct), is_handShaked(is_handShaked), has_handShaked(false), retry_count(0)
++  {
++    ldout(cct, 3) << "TLS Socket:" << _fd << dendl;
++    if (ssl == nullptr) {
++      lderr(cct) << __func__ << " ssl nullptr " << dendl;
++    }
++  }
++
++  int is_connected() override {
++    if (connected)
++      return 1;
++
++    int r = handler.reconnect(sa, _fd);
++
++    if (r == 0) {
++      if (is_handShaked == false) {
++          int ret = SSL_connect(ssl);
++          if (ret > 0) {
++              is_handShaked = true;
++              ldout(cct, 20) << " TLS Socket " << _fd << " reconnect success" << dendl;
++          } else {
++              ldout(cct, 20) << " Socket " << _fd << " reconnect success, but TLS Socket reconnect failed" << dendl;
++          }
++      }
++      connected = true;
++      return 1;
++    } else if (r < 0) {
++      return r;
++      lderr(cct) << "TLS Socket " << _fd << "reconnect fail " << r << dendl;
++    } else {
++      return 0;
++      lderr(cct) << "TLS Socket " << _fd << "reconnect fail 0" << dendl;
++    }
++  }
++
++  int try_handShaked() {
++    if (is_handShaked) {
++    	return 1;
++    }
++    if (retry_count++ > RETRY_TIME) {
++        lderr(cct) << __func__ << " ssl accept failed error " << "retry time" << retry_count << dendl;
++        return -1;
++    }
++
++    int ret = 0;
++    if (is_server) {
++    	ret = SSL_accept(ssl);
++        if (ret <= 0) {
++            ldout(cct, 3) << "ssl accept failed fd: " <<  _fd  << " retry time: " << retry_count << dendl;
++            return 0;
++        }
++        ldout(cct, 1) << "ssl accept success fd: " <<  _fd  << " retry time: " << retry_count << dendl;
++        is_handShaked = true;
++        return 1;
++    } else {
++        ret = SSL_connect(ssl);
++        if (ret <= 0) {
++            ldout(cct, 3) << "ssl connect failed fd: " <<  _fd  << " retry time: " << retry_count << dendl;
++            return 0;
++        }
++        ldout(cct, 1) << "ssl connect success fd: " <<  _fd  << " retry time: " << retry_count << dendl;
++        is_handShaked = true;
++        return 1;
++    }
++  }
++
++  ssize_t zero_copy_read(bufferptr&) override {
++    return -EOPNOTSUPP;
++  }
++
++  ssize_t read(char *buf, size_t len) override {
++    int try_ret = try_handShaked();
++    if (try_ret == -1) {
++        lderr(cct) << __func__ << " TLS handShaked failed" << " fd: " << _fd << dendl;
++        return -1;
++    } else if (try_ret == 0) {
++        return -11;
++    }
++    ERR_clear_error();
++    ssize_t r = SSL_read(ssl, buf, len);
++    if (r <= 0) {
++      int read_errno = errno;
++      int ssl_errno = SSL_get_error(ssl, r);
++      long error = ERR_get_error();
++      const char* error_string = ERR_error_string(error, NULL);
++      if (read_errno == 11) {
++        ldout(cct, 4) << "TLS read fail, r = " <<  r << "  errno = " << read_errno << "len = "  << len << "fd: " << _fd << "ssl_errno: "<< ssl_errno << " ssl_errno_str: " << error_string <<dendl;
++      } else {
++     	 lderr(cct) << "TLS read fail, r = " <<  r << "  errno = " << read_errno  << "len = " << len << "fd: " << _fd << "ssl_errno: "<< ssl_errno << " ssl_errno_str: " << error_string  <<dendl;
++      }
++      if (ssl_errno == SSL_ERROR_ZERO_RETURN) {
++      	r = 0;
++      } else {
++        r = -read_errno;
++      }
++      return r;
++    }
++    ldout(cct, 5) << " TLS read successful, fd=" << _fd << " r = " << r << dendl;
++    return r;
++  }
++
++  ssize_t do_sendmsg(int fd, struct msghdr &msg, unsigned len, bool more, SSL* ssl)
++  {
++    char* tempBuffer = (char*)malloc(len);
++    char *cur;
++    if (tempBuffer == nullptr) {
++      return -1;
++    }
++    cur = tempBuffer;
++
++    int offset = 0;
++    for (int i = 0; i < msg.msg_iovlen; ++i) {
++        memcpy(tempBuffer + offset, msg.msg_iov[i].iov_base, msg.msg_iov[i].iov_len);
++        offset += msg.msg_iov[i].iov_len;
++    }
++    ceph_assert(offset == len);
++    int remain = offset;
++
++    size_t sent = 0;
++    while (remain > 0) {
++      MSGR_SIGPIPE_STOPPER;
++      ssize_t r;
++
++      int write_errno = 0;
++      int32_t ssl_err = 0;
++
++        ERR_clear_error();
++        r = SSL_write(ssl, cur, remain);
++        write_errno = errno;
++        if (r <= 0) {
++            ssl_err = SSL_get_error(ssl, r);
++            long error = ERR_get_error();
++            const char* error_string = ERR_error_string(error, NULL);
++            if (write_errno == EINTR) {
++                continue;
++            } else if (write_errno == EAGAIN || ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
++                ldout(cct, 4) << "TLS write fail, r = " <<  r << "   errno = " << write_errno << " fd: " << _fd << " ssl_errno: "<< ssl_err << " ssl_errno_str: " << error_string <<dendl;
++                free(tempBuffer);
++                return (ssize_t)sent;
++            } else {
++                lderr(cct) << __func__ << " TLS sent failed r = " << r << " ssl_errno: " <<  ssl_err << " errno: "<< write_errno << " fd: " << _fd << " ssl_errno_str: " << error_string << dendl;
++                free (tempBuffer);
++                return -write_errno;
++            }
++        }
++
++      sent += r;
++      cur += r;
++      remain -= r;
++    }
++    ldout(cct, 5) << " TLS write successful, fd=" << fd << " r = " << sent << dendl;
++    free (tempBuffer);
++    return (ssize_t)sent;
++  }
++
++  ssize_t send(bufferlist &bl, bool more) override {
++    int try_ret = try_handShaked();
++    if (try_ret == -1) {
++        lderr(cct) << __func__ << " TLS handShaked failed" << " fd: " << _fd << dendl;
++        return -1;
++    } else if (try_ret == 0) {
++        return 0;
++    }
++    size_t sent_bytes = 0;
++    auto pb = std::cbegin(bl.buffers());
++    uint64_t left_pbrs = std::size(bl.buffers());
++    while (left_pbrs) {
++      struct msghdr msg;
++      struct iovec msgvec[IOV_MAX];
++      uint64_t size = std::min<uint64_t>(left_pbrs, IOV_MAX);
++      left_pbrs -= size;
++      // FIPS zeroization audit 20191115: this memset is not security related.
++      memset(&msg, 0, sizeof(msg));
++      msg.msg_iovlen = size;
++      msg.msg_iov = msgvec;
++      unsigned msglen = 0;
++      for (auto iov = msgvec; iov != msgvec + size; iov++) {
++        iov->iov_base = (void*)(pb->c_str());
++        iov->iov_len = pb->length();
++        msglen += pb->length();
++        ++pb;
++      }
++      ssize_t r = do_sendmsg(_fd, msg, msglen, left_pbrs || more, ssl);
++      if (r < 0) {
++        lderr(cct) << __func__ << " TLS sent error  "  <<  SSL_get_error(ssl, r) << "fd: " << _fd << dendl;
++        return r;
++      }
++
++      // "r" is the remaining length
++      sent_bytes += r;
++      if (static_cast<unsigned>(r) < msglen)
++        break;
++      // only "r" == 0 continue
++    }
++
++    if (sent_bytes) {
++      bufferlist swapped;
++      if (sent_bytes < bl.length()) {
++        bl.splice(sent_bytes, bl.length()-sent_bytes, &swapped);
++        bl.swap(swapped);
++      } else {
++        bl.clear();
++      }
++    }
++    ldout(cct, 10) << __func__ << " TLS sent  " << sent_bytes << " bytes success"  <<dendl;
++
++    return static_cast<ssize_t>(sent_bytes);
++  }
++  void shutdown() override {
++    ::shutdown(_fd, SHUT_RDWR);
++  }
++  void close() override {
++    ::close(_fd);
++    ldout(cct, 3) << "ssl close " << " fd:   "  <<  _fd  << dendl;
++    SSL_free(ssl);
++  }
++  int fd() const override {
++    return _fd;
++  }
++  int socket_fd() const override {
++    return _fd;
++  }
++  friend class PosixServerSocketImpl;
++  friend class TlsPosixNetworkStack;
++};
++
+ class PosixConnectedSocketImpl final : public ConnectedSocketImpl {
+   NetHandler &handler;
+   int _fd;
+@@ -45,7 +288,8 @@
+ 
+  public:
+   explicit PosixConnectedSocketImpl(NetHandler &h, const entity_addr_t &sa, int f, bool connected)
+-      : handler(h), _fd(f), sa(sa), connected(connected) {}
++      : handler(h), _fd(f), sa(sa), connected(connected) {
++      }
+ 
+   int is_connected() override {
+     if (connected)
+@@ -68,13 +312,12 @@
+ 
+   ssize_t read(char *buf, size_t len) override {
+     ssize_t r = ::read(_fd, buf, len);
+-    if (r < 0)
++    if (r < 0) {
+       r = -errno;
++    }
+     return r;
+   }
+ 
+-  // return the sent length
+-  // < 0 means error occurred
+   static ssize_t do_sendmsg(int fd, struct msghdr &msg, unsigned len, bool more)
+   {
+     size_t sent = 0;
+@@ -82,6 +325,7 @@
+       MSGR_SIGPIPE_STOPPER;
+       ssize_t r;
+       r = ::sendmsg(fd, &msg, MSG_NOSIGNAL | (more ? MSG_MORE : 0));
++
+       if (r < 0) {
+         if (errno == EINTR) {
+           continue;
+@@ -169,16 +413,22 @@
+   friend class PosixNetworkStack;
+ };
+ 
++void PosixWorker::initialize()
++{
++}
++
+ class PosixServerSocketImpl : public ServerSocketImpl {
+   NetHandler &handler;
+   int _fd;
++  SSL_CTX *ctx;
++  CephContext *cct;
+ 
+  public:
+   explicit PosixServerSocketImpl(NetHandler &h, int f,
+-				 const entity_addr_t& listen_addr, unsigned slot)
++				 const entity_addr_t& listen_addr, unsigned slot, SSL_CTX *ctx, CephContext *cct)
+     : ServerSocketImpl(listen_addr.get_type(), slot),
+-      handler(h), _fd(f) {}
+-  int accept(ConnectedSocket *sock, const SocketOptions &opts, entity_addr_t *out, Worker *w) override;
++      handler(h), _fd(f), ctx(ctx), cct(cct) {}
++  int accept(ConnectedSocket *sock, const SocketOptions &opts, entity_addr_t *out, Worker *w);
+   void abort_accept() override {
+     ::close(_fd);
+   }
+@@ -188,23 +438,28 @@
+ };
+ 
+ int PosixServerSocketImpl::accept(ConnectedSocket *sock, const SocketOptions &opt, entity_addr_t *out, Worker *w) {
++  certParam_t certParam;
++
+   ceph_assert(sock);
+   sockaddr_storage ss;
+   socklen_t slen = sizeof(ss);
+   int sd = accept_cloexec(_fd, (sockaddr*)&ss, &slen);
+   if (sd < 0) {
++    ldout(cct, 3) << " accept_cloexec failed " << " errno:  "<<  errno  << dendl;
+     return -errno;
+   }
+ 
+   int r = handler.set_nonblock(sd);
+   if (r < 0) {
+     ::close(sd);
++    ldout(cct, 3) << " set_nonblock failed " <<dendl;
+     return -errno;
+   }
+ 
+   r = handler.set_socket_options(sd, opt.nodelay, opt.rcbuf_size);
+   if (r < 0) {
+     ::close(sd);
++    ldout(cct, 3) << " set_socket_options failed " <<dendl;
+     return -errno;
+   }
+ 
+@@ -212,15 +467,54 @@
+ 
+   out->set_type(addr_type);
+   out->set_sockaddr((sockaddr*)&ss);
++  entity_addr_t local_addr;
++  sockaddr_storage localS;
++  socklen_t llen = sizeof(localS);
++  int rc = getsockname(_fd, (sockaddr*)&localS, &llen);
++  if (rc < 0) {
++    lderr(cct) << __func__ << " get port failed "  << dendl;
++  }
++  local_addr.set_sockaddr((sockaddr*)&localS);
+   handler.set_priority(sd, opt.priority, out->get_family());
+ 
+-  std::unique_ptr<PosixConnectedSocketImpl> csi(new PosixConnectedSocketImpl(handler, *out, sd, true));
+-  *sock = ConnectedSocket(std::move(csi));
+-  return 0;
+-}
++  if (certParamInit(&certParam) != 0) {
++    lderr(cct) << " cert param init failed" << " abort" << dendl;
++    ceph_abort();
++  }
+ 
+-void PosixWorker::initialize()
+-{
++  if ((certParam.tlsStatus == 1) && (local_addr.get_port() >= 7880 && local_addr.get_port() <= 7889)) {
++    if (!CheckIpIsInTrustList(out->ip_only_to_str().c_str())) {
++      ldout(cct, 3) << "ip addr" << out->ip_only_to_str() << " check whitelist failed close fd" << dendl;
++      ::close(sd);
++      return -1; 
++    }
++    SSL *sslNew = SSL_new(ctx);
++    if (sslNew == nullptr) {
++      ::close(sd);
++      lderr(cct) << __func__ << " ssl nullptr " << dendl;
++      return -errno;
++    }
++    ldout(cct, 3) << __func__ << " TLS accept fd:  " << sd << " port: " <<  local_addr.get_port() << "  SSL Version: "  <<  SSL_get_version(sslNew)  <<dendl;
++    if (SSL_set_fd(sslNew, sd) <= 0) {
++      lderr(cct) << __func__ << " ctx set fd failed "  << dendl;
++      ::close(sd);
++      SSL_free(sslNew);
++      return -errno;
++    }
++    int ret = SSL_accept(sslNew);
++    bool is_handShaked = false;
++    if (ret > 0) {
++      is_handShaked = true;
++      ldout(cct, 3) << "ssl accept success fd: " <<  sd  << " connect port: "  << local_addr.get_port() << dendl;
++    }
++    std::unique_ptr<TlsPosixConnectedSocketImpl> csi(new TlsPosixConnectedSocketImpl(handler, *out, sd, true, sslNew, true, cct, is_handShaked));
++    *sock = ConnectedSocket(std::move(csi));
++  } else {
++    ldout(cct, 3) << " TCP accept success  "<< "fd: " <<  sd  <<dendl;
++    std::unique_ptr<PosixConnectedSocketImpl> csi(new PosixConnectedSocketImpl(handler, *out, sd, true));
++    *sock = ConnectedSocket(std::move(csi));
++  }
++  return 0;
+ }
+ 
+ int PosixWorker::listen(entity_addr_t &sa,
+@@ -232,7 +526,6 @@
+   if (listen_sd < 0) {
+     return -errno;
+   }
+-
+   int r = net.set_nonblock(listen_sd);
+   if (r < 0) {
+     ::close(listen_sd);
+@@ -248,7 +541,7 @@
+   r = ::bind(listen_sd, sa.get_sockaddr(), sa.get_sockaddr_len());
+   if (r < 0) {
+     r = -errno;
+-    ldout(cct, 10) << __func__ << " unable to bind to " << sa.get_sockaddr()
++    ldout(cct, 3) << __func__ << " unable to bind to " << sa.get_sockaddr()
+                    << ": " << cpp_strerror(r) << dendl;
+     ::close(listen_sd);
+     return r;
+@@ -264,13 +557,12 @@
+ 
+   *sock = ServerSocket(
+           std::unique_ptr<PosixServerSocketImpl>(
+-	    new PosixServerSocketImpl(net, listen_sd, sa, addr_slot)));
++	    new PosixServerSocketImpl(net, listen_sd, sa, addr_slot, ctx, cct)));
+   return 0;
+ }
+ 
+ int PosixWorker::connect(const entity_addr_t &addr, const SocketOptions &opts, ConnectedSocket *socket) {
+   int sd;
+-
+   if (opts.nonblock) {
+     sd = net.nonblock_connect(addr, opts.connect_bind_addr);
+   } else {
+@@ -282,8 +574,34 @@
+   }
+ 
+   net.set_priority(sd, opts.priority, addr.get_family());
+-  *socket = ConnectedSocket(
++
++  ldout(cct, 3) << "fd:" <<  sd  << " connect port: "  << addr.get_port() << " tlsStatus " << tlsParam.tlsStatus << dendl;
++  if ((tlsParam.tlsStatus == 1) && (addr.get_port() >= tlsParam.portIdStart && addr.get_port() <= tlsParam.portIdEnd)) {
++    SSL *sslNew = SSL_new(ctx);
++    if (sslNew == nullptr) {
++        lderr(cct) << __func__ << " ssl new failed "  << dendl;
++        return -errno;
++    }
++    ldout(cct, 3) << "SSL Version: " << SSL_get_version(sslNew)  << dendl;
++    if (SSL_set_fd(sslNew, sd) <= 0) {
++      lderr(cct) << __func__ << " ctx set fd failed "  << dendl;
++      return -errno;
++    }
++    int ret = SSL_connect(sslNew);
++    bool is_handShaked = false;
++    if (ret > 0) {
++      is_handShaked = true;
++      ldout(cct, 3) << "ssl connect success fd: " <<  sd  << "connect port: "  << addr.get_port() << dendl;
++    } else {
++      ldout(cct, 3) << "ssl connect skip fd=" << sd << " headshake=" << is_handShaked << dendl;
++    }
++
++    *socket = ConnectedSocket(
++    std::unique_ptr<TlsPosixConnectedSocketImpl>(new TlsPosixConnectedSocketImpl(net, addr, sd, !opts.nonblock, sslNew, false, cct, is_handShaked)));
++  } else {
++    *socket = ConnectedSocket(
+       std::unique_ptr<PosixConnectedSocketImpl>(new PosixConnectedSocketImpl(net, addr, sd, !opts.nonblock)));
++  }
+   return 0;
+ }
+ 
+diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.h cephmod/ceph-14.2.8/src/msg/async/PosixStack.h
+--- cephnew/ceph-14.2.8/src/msg/async/PosixStack.h	2020-03-03 01:49:20.000000000 +0800
++++ cephmod/ceph-14.2.8/src/msg/async/PosixStack.h	2022-12-15 16:07:09.651098500 +0800
+@@ -18,18 +18,31 @@
+ #define CEPH_MSG_ASYNC_POSIXSTACK_H
+ 
+ #include <thread>
++#include <openssl/ssl.h>
++#include <openssl/err.h>
++#include <openssl/x509.h>
++#include <openssl/pem.h>
++#include <openssl/evp.h>
++#include <openssl/rsa.h>     
++#include <openssl/crypto.h>
++#include <openssl/rand.h>
+ 
+ #include "msg/msg_types.h"
+ #include "msg/async/net_handler.h"
+ 
+ #include "Stack.h"
++#include "cert_ceph.h"
++
+ 
+ class PosixWorker : public Worker {
+   NetHandler net;
+   void initialize() override;
++  SSL_CTX *ctx;
++  certParam_t tlsParam;
+  public:
+-  PosixWorker(CephContext *c, unsigned i)
+-      : Worker(c, i), net(c) {}
++  PosixWorker(CephContext *c, unsigned i, SSL_CTX *ctx, certParam_t tlsParam)
++      : Worker(c, i), net(c) , ctx(ctx), tlsParam(tlsParam){
++      }
+   int listen(entity_addr_t &sa,
+ 	     unsigned addr_slot,
+ 	     const SocketOptions &opt,
+diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/Stack.cc cephmod/ceph-14.2.8/src/msg/async/Stack.cc
+--- cephnew/ceph-14.2.8/src/msg/async/Stack.cc	2020-03-03 01:49:20.000000000 +0800
++++ cephmod/ceph-14.2.8/src/msg/async/Stack.cc	2022-12-15 16:07:09.655711100 +0800
+@@ -29,6 +29,7 @@
+ 
+ #include "common/dout.h"
+ #include "include/ceph_assert.h"
++#include "cert_ceph.h"
+ 
+ #define dout_subsys ceph_subsys_ms
+ #undef dout_prefix
+@@ -82,10 +83,10 @@
+   return nullptr;
+ }
+ 
+-Worker* NetworkStack::create_worker(CephContext *c, const string &type, unsigned i)
++Worker* NetworkStack::create_worker(CephContext *c, const string &type, unsigned i, SSL_CTX *ctx, certParam_t tlsParam)
+ {
+   if (type == "posix")
+-    return new PosixWorker(c, i);
++    return new PosixWorker(c, i, ctx, tlsParam);
+ #ifdef HAVE_RDMA
+   else if (type == "rdma")
+     return new RDMAWorker(c, i);
+@@ -105,6 +106,31 @@
+ {
+   ceph_assert(cct->_conf->ms_async_op_threads > 0);
+ 
++  tlsParam = {0};
++  if (certParamInit(&tlsParam) != 0) {
++    lderr(cct) << __func__ << " tlsParam init failed "  << dendl;
++  }
++  ldout(cct, 3) << __func__ << " tlsParam init success "  << dendl;
++  if (tlsParam.tlsStatus == 1) {
++    if (checkCertTask(&tlsParam) != 0) {
++      printf("check cert failed, exit\n");
++      lderr(cct) << __func__ << " check cert failed "  << dendl;
++      exit(1);
++    }
++    if (sslctxInit(&tlsParam, &ctx) != 0) {
++      printf("ctx init failed, exit\n");
++      lderr(cct) << __func__ << " ctx init failed "  << dendl;
++      exit(1);
++    }
++    if (backgroundCertMonitorInit(&tlsParam) != 0) {
++      printf("init cert monitor thread failed, exit\n");
++      lderr(cct) << __func__ << " init cert monitor thread failed "  << dendl;
++    }
++    SSL_CTX_set_mode(ctx, SSL_MODE_ENABLE_PARTIAL_WRITE);
++    SSL_CTX_set_mode(ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
++    ldout(cct, 3) << __func__ << " ctx init success "  << dendl;
++  }
++
+   const int InitEventNumber = 5000;
+   num_workers = cct->_conf->ms_async_op_threads;
+   if (num_workers >= EventCenter::MAX_EVENTCENTER) {
+@@ -116,7 +142,7 @@
+   }
+ 
+   for (unsigned i = 0; i < num_workers; ++i) {
+-    Worker *w = create_worker(cct, type, i);
++    Worker *w = create_worker(cct, type, i, ctx, tlsParam);
+     w->center.init(InitEventNumber, i, type);
+     workers.push_back(w);
+   }
+diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/Stack.h cephmod/ceph-14.2.8/src/msg/async/Stack.h
+--- cephnew/ceph-14.2.8/src/msg/async/Stack.h	2020-03-03 01:49:20.000000000 +0800
++++ cephmod/ceph-14.2.8/src/msg/async/Stack.h	2022-12-15 16:07:09.659767000 +0800
+@@ -21,6 +21,7 @@
+ #include "common/perf_counters.h"
+ #include "msg/msg_types.h"
+ #include "msg/async/Event.h"
++#include "cert_ceph.h"
+ 
+ class Worker;
+ class ConnectedSocketImpl {
+@@ -308,21 +309,27 @@
+  protected:
+   CephContext *cct;
+   vector<Worker*> workers;
++  SSL_CTX *ctx;
++  certParam_t tlsParam;
+ 
+   explicit NetworkStack(CephContext *c, const string &t);
+  public:
+   NetworkStack(const NetworkStack &) = delete;
+   NetworkStack& operator=(const NetworkStack &) = delete;
+   virtual ~NetworkStack() {
+-    for (auto &&w : workers)
++    for (auto &&w : workers) {
+       delete w;
++    }
++    if ((ctx != nullptr) && (tlsParam.tlsStatus == 1)) {
++      SSL_CTX_free(ctx);
++    }
+   }
+ 
+   static std::shared_ptr<NetworkStack> create(
+           CephContext *c, const string &type);
+ 
+   static Worker* create_worker(
+-          CephContext *c, const string &t, unsigned i);
++          CephContext *c, const string &t, unsigned i, SSL_CTX *ctx, certParam_t tlsParam);
+   // backend need to override this method if supports zero copy read
+   virtual bool support_zero_copy_read() const { return false; }
+   // backend need to override this method if backend doesn't support shared

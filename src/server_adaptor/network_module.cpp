@@ -1372,7 +1372,7 @@ void EncodeListSnaps(const ObjSnaps *objSnaps, int i, MOSDOp *mosdop)
         return;
     }
     if (objSnaps->cloneInfoNum < 1) {
-        Salog(LV_ERROR, LOG_TYPE, " cloneInfoNum at lease 1");
+        Salog(LV_ERROR, LOG_TYPE, " cloneInfoNum at least 1");
         return;
     }
     obj_list_snap_response_t resp;
