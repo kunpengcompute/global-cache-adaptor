@@ -1630,7 +1630,7 @@ index 0c047c4..2b0ce9f 100644
    private:
      /* You can only get IoCtx instances from Rados */
 diff --git a/src/include/rbd/librbd.h b/src/include/rbd/librbd.h
-index 83b5735..e19a7be 100644
+index 83b5735..8874286 100644
 --- a/src/include/rbd/librbd.h
 +++ b/src/include/rbd/librbd.h
 @@ -934,6 +934,16 @@ CEPH_RBD_API int64_t rbd_read_iterate(rbd_image_t image, uint64_t ofs, size_t le
@@ -1641,10 +1641,10 @@ index 83b5735..e19a7be 100644
 +CEPH_RBD_API void rbd_get_date_dts_addr(rbd_image_t image, uint64_t offset, uint64_t *objOffset,
 +                    char *objAddr, uint32_t *objId);
 +
-+CEPH_RBD_API uint32_t rbd_client_image_read(rbd_image_t image, uint32_t objId, uint32_t objOffset,
++CEPH_RBD_API int rbd_client_image_read(rbd_image_t image, uint32_t objId, uint32_t objOffset,
 +                    char* buf, size_t len);
 +
-+CEPH_RBD_API uint32_t rbd_client_image_aio_read(rbd_image_t image, uint32_t objId, uint32_t objOffset,
++CEPH_RBD_API int rbd_client_image_aio_read(rbd_image_t image, uint32_t objId, uint32_t objOffset,
 +                char *buf, size_t len, rbd_completion_t c);
 +#endif
  /**
@@ -1816,22 +1816,23 @@ index df5271e..2e8d7f0 100644
      uint64_t readahead_max_bytes;
      uint64_t readahead_disable_after_bytes;
 diff --git a/src/librbd/Operations.cc b/src/librbd/Operations.cc
-index ffb8f5c..9dca2f6 100644
+index ffb8f5c..58fbe1d 100644
 --- a/src/librbd/Operations.cc
 +++ b/src/librbd/Operations.cc
-@@ -41,6 +41,11 @@
+@@ -41,6 +41,12 @@
  #include <boost/bind.hpp>
  #include <boost/scope_exit.hpp>
  
 +#ifdef WITH_GLOBAL_CACHE
 +#include "client_adaptor/ClientAdaptorPlugin.h"
 +#include "client_adaptor/ClientAdaptorMgr.h"
++#include "client_adaptor/ClientAdaptorMsg.h"
 +#endif
 +
  #define dout_subsys ceph_subsys_rbd
  #undef dout_prefix
  #define dout_prefix *_dout << "librbd::Operations: "
-@@ -245,8 +250,21 @@ struct C_InvokeAsyncRequest : public Context {
+@@ -245,8 +251,21 @@ struct C_InvokeAsyncRequest : public Context {
        return;
      }
  
@@ -1853,7 +1854,34 @@ index ffb8f5c..9dca2f6 100644
    }
  
    void send_remote_request() {
-@@ -811,6 +829,35 @@ int Operations<I>::snap_rollback(const cls::rbd::SnapshotNamespace& snap_namespa
+@@ -733,6 +752,26 @@ void Operations<I>::snap_create(const cls::rbd::SnapshotNamespace &snap_namespac
+   }
+   m_image_ctx.snap_lock.put_read();
+ 
++#ifdef WITH_GLOBAL_CACHE
++  if (m_image_ctx.md_ctx.check_acc()) {
++    PluginRegistry *reg = cct->get_plugin_registry();
++    auto plugin = static_cast<ClientAdaptorPlugin *>(reg->get_with_load("global_cache", "client_adaptor_plugin"));
++
++    if (!plugin || !plugin->msg_ref) {
++      lderr(cct) << "global_cache plugin not loaded, plugin=" << plugin << dendl;
++      on_finish->complete(-EINVAL);
++      return;
++    }
++
++    if (plugin->msg_ref->is_gc_snap(snap_name)) {
++      lderr(cct) << "create " << snap_name << " with prefix " << plugin->msg_ref->gc_snap_prefix()
++          << " which be used by gc internal, not allowed" << dendl;
++      on_finish->complete(-EBUSY);
++      return;
++    }
++  }
++#endif
++
+   C_InvokeAsyncRequest<I> *req = new C_InvokeAsyncRequest<I>(
+     m_image_ctx, "snap_create", exclusive_lock::OPERATION_REQUEST_TYPE_GENERAL,
+     true,
+@@ -811,6 +850,39 @@ int Operations<I>::snap_rollback(const cls::rbd::SnapshotNamespace& snap_namespa
        }
      }
  
@@ -1862,7 +1890,7 @@ index ffb8f5c..9dca2f6 100644
 +      PluginRegistry *reg = cct->get_plugin_registry();
 +      auto plugin = static_cast<ClientAdaptorPlugin *>(reg->get_with_load("global_cache", "client_adaptor_plugin"));
 +      int mgr_ret = -ELIBACC;
-+      if (plugin && plugin->mgr_ref) {
++      if (plugin && plugin->mgr_ref && plugin->msg_ref) {
 +        int64_t md_pool_id;
 +        int64_t data_pool_id;
 +        md_pool_id = m_image_ctx.md_ctx.get_id();
@@ -1870,6 +1898,10 @@ index ffb8f5c..9dca2f6 100644
 +          data_pool_id = md_pool_id;
 +        } else {
 +          data_pool_id = m_image_ctx.data_ctx.get_id();
++        }
++        if (plugin->msg_ref->is_gc_snap(snap_name)) {
++          lderr(cct) << snap_name << "is gc internal snap, rollback not allowed" << dendl;
++          return -EBUSY;
 +        }
 +        ldout(cct, 10) << " check if rollback " << md_pool_id << "/" << data_pool_id << "/" << m_image_ctx.id << dendl;
 +        mgr_ret = plugin->mgr_ref->gc_is_rollbacking(md_pool_id, data_pool_id, m_image_ctx.id);
@@ -1889,6 +1921,140 @@ index ffb8f5c..9dca2f6 100644
      r = prepare_image_update(exclusive_lock::OPERATION_REQUEST_TYPE_GENERAL,
                               false);
      if (r < 0) {
+@@ -913,6 +985,80 @@ void Operations<I>::snap_remove(const cls::rbd::SnapshotNamespace& snap_namespac
+                    (m_image_ctx.features & RBD_FEATURE_JOURNALING) != 0);
+   m_image_ctx.snap_lock.put_read();
+ 
++#ifdef WITH_GLOBAL_CACHE
++  if (m_image_ctx.md_ctx.check_acc()) {
++  ldout(cct, 10) << "snap_remove acc_pool" << dendl;
++
++  m_image_ctx.snap_lock.get_read();
++  uint64_t snap_id = m_image_ctx.get_snap_id(cls::rbd::UserSnapshotNamespace(), snap_name);
++  m_image_ctx.snap_lock.put_read();
++  ceph_assert(snap_id != CEPH_NOSNAP);
++  PluginRegistry *reg = cct->get_plugin_registry();
++  auto plugin = static_cast<ClientAdaptorPlugin *>(reg->get_with_load("global_cache", "client_adaptor_plugin"));
++  int mgr_ret = -ELIBACC;
++
++  if (plugin && plugin->mgr_ref) {
++      int64_t pool_id;
++      string name_space;
++      if (!m_image_ctx.data_ctx.is_valid()) {
++        pool_id = m_image_ctx.md_ctx.get_id();
++        name_space = m_image_ctx.md_ctx.get_namespace();
++        ldout(cct, 10) << "data ctx invalid poolId=" << pool_id << dendl;
++      } else {
++        pool_id = m_image_ctx.data_ctx.get_id();
++        name_space = m_image_ctx.data_ctx.get_namespace();
++        ldout(cct, 10) << "data ctx valid poolId=" << pool_id << dendl;
++      }
++
++      if (plugin->msg_ref->is_gc_snap(snap_name)) {
++        lderr(cct) << snap_name << "is gc internal snap, remove not allowed" << dendl;
++        on_finish->complete(-EBUSY);
++        return;
++      }
++
++      mgr_ret = plugin->mgr_ref->gc_snap_is_rollbacking(pool_id, m_image_ctx.id, snap_id);
++      if (mgr_ret < 0) {
++        on_finish->complete(mgr_ret);
++        return;
++      } else if (mgr_ret == 1) {
++        lderr(cct) << " Client Adaptor: " << pool_id << "/" << m_image_ctx.id << "@" << snap_id
++          << " GC backend is rollbacking, this snap delete not allowed, please wait." << dendl;
++        on_finish->complete(-EAGAIN);
++        return;
++      }
++
++      mgr_ret = plugin->mgr_ref->remove_snap_from_gc(pool_id, name_space, m_image_ctx.id, snap_id);
++      if (mgr_ret < 0) {
++          lderr(cct) << " " << __func__ << "remove snap failed, agent return " << mgr_ret << dendl;
++      } else {
++          bool exist = false;
++          int t = 0;
++          do {
++            if (exist) {
++                ldout(cct, 20) << "snap still exists snap_name= " << snap_name << dendl;
++                usleep(500000);   // 0.5s
++            }
++            if (t < 10) {
++              mgr_ret = snap_exists(&m_image_ctx, cls::rbd::UserSnapshotNamespace(),
++                snap_name.c_str(), &exist);
++              t++;
++            } else {
++              mgr_ret = snap_exists_with_refresh(&m_image_ctx, cls::rbd::UserSnapshotNamespace(),
++                snap_name.c_str(), &exist);
++              t = 0;
++            }
++            if (mgr_ret < 0) {
++                lderr(cct) << " " << __func__ << ": refresh failed, ret=" << mgr_ret << dendl;
++            }
++          } while(exist);
++      }
++  } else {
++      lderr(cct) << " " << __func__ << ": load plugin failed! plugin=" << plugin << dendl;
++  }
++    on_finish->complete(mgr_ret);
++    return;
++  }
++#endif
+   if (proxy_op) {
+     auto request_type = exclusive_lock::OPERATION_REQUEST_TYPE_GENERAL;
+     if (cls::rbd::get_snap_namespace_type(snap_namespace) ==
+@@ -1010,6 +1156,28 @@ int Operations<I>::snap_rename(const char *srcname, const char *dstname) {
+     }
+   }
+ 
++#ifdef WITH_GLOBAL_CACHE
++  if (m_image_ctx.md_ctx.check_acc()) {
++    PluginRegistry *reg = cct->get_plugin_registry();
++    auto plugin = static_cast<ClientAdaptorPlugin *>(reg->get_with_load("global_cache", "client_adaptor_plugin"));
++
++    if (!plugin || !plugin->msg_ref) {
++      lderr(cct) << "global_cache plugin not loaded, plugin=" << plugin << dendl;
++      return -EINVAL;
++    }
++
++    if (plugin->msg_ref->is_gc_snap(srcname)) {
++      lderr(cct) << srcname << "is gc internal snap, rename not allowed" << dendl;
++      return -EBUSY;
++    }
++
++    if (plugin->msg_ref->is_gc_snap(dstname)) {
++      lderr(cct) << dstname << "is gc internal snap, rename not allowed" << dendl;
++      return -EBUSY;
++    }
++  }
++#endif
++
+   if (m_image_ctx.test_features(RBD_FEATURE_JOURNALING)) {
+     r = invoke_async_request("snap_rename",
+                              exclusive_lock::OPERATION_REQUEST_TYPE_GENERAL,
+@@ -1111,6 +1279,23 @@ int Operations<I>::snap_protect(const cls::rbd::SnapshotNamespace& snap_namespac
+     }
+   }
+ 
++#ifdef WITH_GLOBAL_CACHE
++  if (m_image_ctx.md_ctx.check_acc()) {
++    PluginRegistry *reg = cct->get_plugin_registry();
++    auto plugin = static_cast<ClientAdaptorPlugin *>(reg->get_with_load("global_cache", "client_adaptor_plugin"));
++
++    if (!plugin || !plugin->msg_ref) {
++      lderr(cct) << "global_cache plugin not loaded, plugin=" << plugin << dendl;
++      return -EINVAL;
++    }
++
++    if (plugin->msg_ref->is_gc_snap(snap_name)) {
++      lderr(cct) << snap_name << "is gc internal snap, protect not allowed" << dendl;
++      return -EBUSY;
++    }
++  }
++#endif
++
+   if (m_image_ctx.test_features(RBD_FEATURE_JOURNALING)) {
+     r = invoke_async_request("snap_protect",
+                              exclusive_lock::OPERATION_REQUEST_TYPE_GENERAL,
 diff --git a/src/librbd/Types.h b/src/librbd/Types.h
 index 3f11044..e33023f 100644
 --- a/src/librbd/Types.h
@@ -2161,7 +2327,7 @@ index 98d5976..5b67635 100644
  };
  
 diff --git a/src/librbd/internal.cc b/src/librbd/internal.cc
-index 89b538d..0e0316c 100644
+index 89b538d..6c0f0ba 100644
 --- a/src/librbd/internal.cc
 +++ b/src/librbd/internal.cc
 @@ -56,6 +56,11 @@
@@ -2199,83 +2365,7 @@ index 89b538d..0e0316c 100644
    int snap_remove(ImageCtx *ictx, const char *snap_name, uint32_t flags,
  		  ProgressContext& pctx)
    {
-@@ -1280,6 +1301,75 @@ int validate_pool(IoCtx &io_ctx, CephContext *cct) {
-       }
-     }
- 
-+#ifdef WITH_GLOBAL_CACHE
-+  if (ictx->md_ctx.check_acc()) {
-+  ldout(ictx->cct, 10) << "snap_remove acc_pool" << dendl;
-+  if (is_protected) {
-+      lderr(ictx->cct) << "snapshot is protected" << dendl;
-+      return -EBUSY;
-+  }
-+  if (ictx->operations_disabled || ictx->read_only) {
-+      return -EROFS;
-+  }
-+  ictx->snap_lock.get_read();
-+  uint64_t snap_id = ictx->get_snap_id(cls::rbd::UserSnapshotNamespace(), snap_name);
-+  ictx->snap_lock.put_read();
-+  ceph_assert(snap_id != CEPH_NOSNAP);
-+  PluginRegistry *reg = ictx->cct->get_plugin_registry();
-+  auto plugin = static_cast<ClientAdaptorPlugin *>(reg->get_with_load("global_cache", "client_adaptor_plugin"));
-+  int mgr_ret = -ELIBACC;
-+
-+  if (plugin && plugin->mgr_ref) {
-+      int64_t pool_id;
-+      string name_space;
-+      if (!ictx->data_ctx.is_valid()) {
-+        pool_id = ictx->md_ctx.get_id();
-+        name_space = ictx->md_ctx.get_namespace();
-+        ldout(ictx->cct, 10) << "data ctx invalid poolId=" << pool_id << dendl;
-+      } else {
-+        pool_id = ictx->data_ctx.get_id();
-+        name_space = ictx->data_ctx.get_namespace();
-+        ldout(ictx->cct, 10) << "data ctx valid poolId=" << pool_id << dendl;
-+      }
-+      mgr_ret = plugin->mgr_ref->gc_snap_is_rollbacking(pool_id, ictx->id, snap_id);
-+      if (mgr_ret < 0) {
-+        return mgr_ret;
-+      } else if (mgr_ret == 1) {
-+        lderr(ictx->cct) << " Client Adaptor: " << pool_id << "/" << ictx->id << "@" << snap_id
-+          << " GC backend is rollbacking, this snap delete not allowed, please wait." << dendl;
-+        return -EAGAIN;
-+      }
-+
-+      mgr_ret = plugin->mgr_ref->remove_snap_from_gc(pool_id, name_space, ictx->id, snap_id);
-+      if (mgr_ret < 0) {
-+          lderr(ictx->cct) << " " << __func__ << "remove snap failed, agent return " << mgr_ret << dendl;
-+      } else {
-+          bool exist = false;
-+          int t = 0;
-+          do {
-+            if (exist) {
-+                ldout(ictx->cct, 20) << "snap still exists snap_name= " << snap_name << dendl;
-+                usleep(500000);   // 0.5s
-+            }
-+            if (t < 10) {
-+              mgr_ret = snap_exists(ictx, cls::rbd::UserSnapshotNamespace(), snap_name, &exist);
-+              t++;
-+            } else {
-+              mgr_ret = snap_exists_with_refresh(ictx, cls::rbd::UserSnapshotNamespace(), snap_name, &exist);
-+              t = 0;
-+            }
-+            if (mgr_ret < 0) {
-+                lderr(ictx->cct) << " " << __func__ << ": refresh failed, ret=" << mgr_ret << dendl;
-+            }
-+          } while(exist);
-+      }
-+  } else {
-+      lderr(ictx->cct) << " " << __func__ << ": load plugin failed! plugin=" << plugin << dendl;
-+  }
-+  return mgr_ret;
-+  }
-+#endif
-+
-     C_SaferCond ctx;
-     ictx->operations->snap_remove(cls::rbd::UserSnapshotNamespace(), snap_name, &ctx);
- 
-@@ -1580,7 +1670,62 @@ int validate_pool(IoCtx &io_ctx, CephContext *cct) {
+@@ -1580,7 +1601,62 @@ int validate_pool(IoCtx &io_ctx, CephContext *cct) {
        prog_ctx.update_progress(src_size, src_size);
      return r;
    }
@@ -2444,7 +2534,7 @@ index 34f2c2c..cae0341 100644
    ThreadPool::PointerWQ<ImageDispatchSpec<I> >::queue(req);
  }
 diff --git a/src/librbd/librbd.cc b/src/librbd/librbd.cc
-index 749f5cb..996ae09 100644
+index 749f5cb..179ef7d 100644
 --- a/src/librbd/librbd.cc
 +++ b/src/librbd/librbd.cc
 @@ -2154,6 +2154,38 @@ namespace librbd {
@@ -2497,18 +2587,18 @@ index 749f5cb..996ae09 100644
 +  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
 +  librbd::internal_get_data_dst_addr(ictx, offset, objOffset, objAddr, objId);
 +}
-+extern "C" uint32_t rbd_client_image_read(rbd_image_t image, uint32_t objId, uint32_t objOffset,
++extern "C" int rbd_client_image_read(rbd_image_t image, uint32_t objId, uint32_t objOffset,
 +                          char *buf, size_t len)
 +{
 +  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
 +  uint64_t ofs = (uint64_t)objId * ictx->layout.object_size + objOffset;
 +  tracepoint(librbd, read_enter, ictx, ictx->name.c_str(), ictx->snap_name.c_str(), ictx->read_only, ofs, len);
-+  uint32_t r = ictx->io_work_queue->read(ofs, len, librbd::io::ReadResult{buf, len},
++  int r = ictx->io_work_queue->read(ofs, len, librbd::io::ReadResult{buf, len},
 +                      0);
 +  tracepoint(librbd, read_exit, r);
 +  return r;
 +}
-+extern "C" uint32_t rbd_client_image_aio_read(rbd_image_t image, uint32_t objId, uint32_t objOffset,
++extern "C" int rbd_client_image_aio_read(rbd_image_t image, uint32_t objId, uint32_t objOffset,
 +                          char *buf, size_t len, rbd_completion_t c)
 +{
 +  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
@@ -5614,7 +5704,7 @@ index 8b85f3a..34feff1 100644
  
  	// done
 diff --git a/src/tools/rbd/action/Snap.cc b/src/tools/rbd/action/Snap.cc
-index 70cf62d..4a1c843 100644
+index 70cf62d..efec5f8 100644
 --- a/src/tools/rbd/action/Snap.cc
 +++ b/src/tools/rbd/action/Snap.cc
 @@ -12,6 +12,10 @@
@@ -5716,65 +5806,7 @@ index 70cf62d..4a1c843 100644
    if (r < 0) {
      cerr << "rbd: failed to list snapshots: " << cpp_strerror(r)
           << std::endl;
-@@ -377,6 +421,23 @@ int execute_create(const po::variables_map &vm,
-     return r;
-   }
- 
-+#ifdef WITH_GLOBAL_CACHE
-+  auto cct = reinterpret_cast<CephContext*>(io_ctx.cct());
-+  PluginRegistry *reg = cct->get_plugin_registry();
-+  auto plugin = static_cast<ClientAdaptorPlugin *>(reg->get_with_load("global_cache", "client_adaptor_plugin"));
-+
-+  if (!plugin || !plugin->msg_ref) {
-+    std::cerr << "global_cache plugin not loaded, plugin=" << plugin << std::endl;
-+    return -EINVAL;
-+  }
-+
-+  if (plugin->msg_ref->is_gc_snap(snap_name) && io_ctx.check_acc()) {
-+    std::cerr << "create " << snap_name << " with prefix " << plugin->msg_ref->gc_snap_prefix()
-+        << " which be used by gc internal, not allowed" << std::endl;
-+    return -EBUSY;
-+  }
-+#endif
-+
-   r = do_add_snap(image, snap_name.c_str());
-   if (r < 0) {
-     cerr << "rbd: failed to create snapshot: " << cpp_strerror(r)
-@@ -458,6 +519,33 @@ int execute_remove(const po::variables_map &vm,
-     return r;
-   }
- 
-+#ifdef WITH_GLOBAL_CACHE
-+  string tmp_snap_name = snap_name;
-+  if (tmp_snap_name.empty()) {
-+    std::vector<librbd::snap_info_t> snaps;
-+    r = image.snap_list(snaps);
-+    for (uint32_t i = 0; i < snaps.size(); i++) {
-+      if (snaps[i].id == snap_id) {
-+        tmp_snap_name = snaps[i].name;
-+        break;
-+      }
-+    }
-+  }
-+  auto cct = reinterpret_cast<CephContext*>(io_ctx.cct());
-+  PluginRegistry *reg = cct->get_plugin_registry();
-+  auto plugin = static_cast<ClientAdaptorPlugin *>(reg->get_with_load("global_cache", "client_adaptor_plugin"));
-+
-+  if (!plugin || !plugin->msg_ref) {
-+    std::cerr << "global_cache plugin not loaded, plugin=" << plugin << std::endl;
-+    return -EINVAL;
-+  }
-+
-+  if (plugin->msg_ref->is_gc_snap(tmp_snap_name) && io_ctx.check_acc()) {
-+    std::cerr << tmp_snap_name << "is gc internal snap, remove not allowed" << std::endl;
-+    return -EBUSY;
-+  }
-+#endif
-+
-   if (!snap_name.empty()) {
-     r = do_remove_snap(image, snap_name.c_str(), force, no_progress);
-   } else {
-@@ -530,8 +618,11 @@ int execute_purge(const po::variables_map &vm,
+@@ -530,8 +574,11 @@ int execute_purge(const po::variables_map &vm,
    if (r < 0) {
      return r;
    }
@@ -5787,78 +5819,6 @@ index 70cf62d..4a1c843 100644
    if (r < 0) {
      if (r != -EBUSY) {
        std::cerr << "rbd: removing snaps failed: " << cpp_strerror(r)
-@@ -571,6 +662,21 @@ int execute_rollback(const po::variables_map &vm,
-   if (r < 0) {
-     return r;
-   }
-+#ifdef WITH_GLOBAL_CACHE
-+  auto cct = reinterpret_cast<CephContext*>(io_ctx.cct());
-+  PluginRegistry *reg = cct->get_plugin_registry();
-+  auto plugin = static_cast<ClientAdaptorPlugin *>(reg->get_with_load("global_cache", "client_adaptor_plugin"));
-+
-+  if (!plugin || !plugin->msg_ref) {
-+    std::cerr << "global_cache plugin not loaded, plugin=" << plugin << std::endl;
-+    return -EINVAL;
-+  }
-+
-+  if (plugin->msg_ref->is_gc_snap(snap_name) && io_ctx.check_acc()) {
-+    std::cerr << snap_name << "is gc internal snap, rollback not allowed" << std::endl;
-+    return -EBUSY;
-+  }
-+#endif
- 
-   r = do_rollback_snap(image, snap_name.c_str(),
-                        vm[at::NO_PROGRESS].as<bool>());
-@@ -610,6 +716,22 @@ int execute_protect(const po::variables_map &vm,
-     return r;
-   }
- 
-+#ifdef WITH_GLOBAL_CACHE
-+  auto cct = reinterpret_cast<CephContext*>(io_ctx.cct());
-+  PluginRegistry *reg = cct->get_plugin_registry();
-+  auto plugin = static_cast<ClientAdaptorPlugin *>(reg->get_with_load("global_cache", "client_adaptor_plugin"));
-+
-+  if (!plugin || !plugin->msg_ref) {
-+    std::cerr << "global_cache plugin not loaded, plugin=" << plugin << std::endl;
-+    return -EINVAL;
-+  }
-+
-+  if (plugin->msg_ref->is_gc_snap(snap_name) && io_ctx.check_acc()) {
-+    std::cerr << snap_name << "is gc internal snap, protect not allowed" << std::endl;
-+    return -EBUSY;
-+  }
-+#endif
-+
-   bool is_protected = false;
-   r = image.snap_is_protected(snap_name.c_str(), &is_protected);
-   if (r < 0) {
-@@ -843,7 +965,26 @@ int execute_rename(const po::variables_map &vm,
-   if (r < 0) {
-     return r;
-   }
-+#ifdef WITH_GLOBAL_CACHE
-+  auto cct = reinterpret_cast<CephContext*>(io_ctx.cct());
-+  PluginRegistry *reg = cct->get_plugin_registry();
-+  auto plugin = static_cast<ClientAdaptorPlugin *>(reg->get_with_load("global_cache", "client_adaptor_plugin"));
-+
-+  if (!plugin || !plugin->msg_ref) {
-+    std::cerr << "global_cache plugin not loaded, plugin=" << plugin << std::endl;
-+    return -EINVAL;
-+  }
-+
-+  if (plugin->msg_ref->is_gc_snap(src_snap_name) && io_ctx.check_acc()) {
-+    std::cerr << src_snap_name << "is gc internal snap, rename not allowed" << std::endl;
-+    return -EBUSY;
-+  }
- 
-+  if (plugin->msg_ref->is_gc_snap(dest_snap_name) && io_ctx.check_acc()) {
-+    std::cerr << dest_snap_name << "is gc internal snap, rename not allowed" << std::endl;
-+    return -EBUSY;
-+  }
-+#endif
-   r = image.snap_rename(src_snap_name.c_str(), dest_snap_name.c_str());
-   if (r < 0) {
-     std::cerr << "rbd: renaming snap failed: " << cpp_strerror(r)
 diff --git a/src/vstart.sh b/src/vstart.sh
 index 37aa28b..a146de3 100644
 --- a/src/vstart.sh
