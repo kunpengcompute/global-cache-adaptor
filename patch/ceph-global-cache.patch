@@ -1816,7 +1816,7 @@ index df5271e..2e8d7f0 100644
      uint64_t readahead_max_bytes;
      uint64_t readahead_disable_after_bytes;
 diff --git a/src/librbd/Operations.cc b/src/librbd/Operations.cc
-index ffb8f5c..58fbe1d 100644
+index ffb8f5c..bf49387 100644
 --- a/src/librbd/Operations.cc
 +++ b/src/librbd/Operations.cc
 @@ -41,6 +41,12 @@
@@ -1921,18 +1921,30 @@ index ffb8f5c..58fbe1d 100644
      r = prepare_image_update(exclusive_lock::OPERATION_REQUEST_TYPE_GENERAL,
                               false);
      if (r < 0) {
-@@ -913,6 +985,80 @@ void Operations<I>::snap_remove(const cls::rbd::SnapshotNamespace& snap_namespac
+@@ -913,6 +985,92 @@ void Operations<I>::snap_remove(const cls::rbd::SnapshotNamespace& snap_namespac
                     (m_image_ctx.features & RBD_FEATURE_JOURNALING) != 0);
    m_image_ctx.snap_lock.put_read();
  
 +#ifdef WITH_GLOBAL_CACHE
 +  if (m_image_ctx.md_ctx.check_acc()) {
 +  ldout(cct, 10) << "snap_remove acc_pool" << dendl;
-+
++  bool is_protected;
 +  m_image_ctx.snap_lock.get_read();
 +  uint64_t snap_id = m_image_ctx.get_snap_id(cls::rbd::UserSnapshotNamespace(), snap_name);
++  int r = m_image_ctx.is_snap_protected(snap_id, &is_protected);
 +  m_image_ctx.snap_lock.put_read();
-+  ceph_assert(snap_id != CEPH_NOSNAP);
++  if (r < 0) {
++    on_finish->complete(r);
++    return;
++  } else if (is_protected) {
++    lderr(cct) << "snapshot is protected" << dendl;
++    on_finish->complete(-EBUSY);
++    return;
++  }
++  if (m_image_ctx.operations_disabled || m_image_ctx.read_only) {
++    on_finish->complete(-EROFS);
++    return;
++  }
 +  PluginRegistry *reg = cct->get_plugin_registry();
 +  auto plugin = static_cast<ClientAdaptorPlugin *>(reg->get_with_load("global_cache", "client_adaptor_plugin"));
 +  int mgr_ret = -ELIBACC;
@@ -2002,7 +2014,7 @@ index ffb8f5c..58fbe1d 100644
    if (proxy_op) {
      auto request_type = exclusive_lock::OPERATION_REQUEST_TYPE_GENERAL;
      if (cls::rbd::get_snap_namespace_type(snap_namespace) ==
-@@ -1010,6 +1156,28 @@ int Operations<I>::snap_rename(const char *srcname, const char *dstname) {
+@@ -1010,6 +1168,28 @@ int Operations<I>::snap_rename(const char *srcname, const char *dstname) {
      }
    }
  
@@ -2031,7 +2043,7 @@ index ffb8f5c..58fbe1d 100644
    if (m_image_ctx.test_features(RBD_FEATURE_JOURNALING)) {
      r = invoke_async_request("snap_rename",
                               exclusive_lock::OPERATION_REQUEST_TYPE_GENERAL,
-@@ -1111,6 +1279,23 @@ int Operations<I>::snap_protect(const cls::rbd::SnapshotNamespace& snap_namespac
+@@ -1111,6 +1291,23 @@ int Operations<I>::snap_protect(const cls::rbd::SnapshotNamespace& snap_namespac
      }
    }
  
