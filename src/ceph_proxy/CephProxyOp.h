@@ -33,7 +33,7 @@ struct RadosXattrsIter {
     RadosXattrsIter(): val(nullptr) {
         i = attrset.end();
     }
-    
+
     ~RadosXattrsIter() {
         if (val) {
             free(val);
@@ -101,8 +101,8 @@ public:
         } read;
 
         struct _readbl {
-	    size_t len = 0;
-	    int buildType = 0;
+            size_t len = 0;
+            int buildType = 0;
             GcBufferList *bl = nullptr;
         } readbl;
 
@@ -128,39 +128,39 @@ public:
             char **outBuf = nullptr;
             size_t *outLen = 0;
         } exec;
-    }reqCtx;
-    
+    } reqCtx;
+
     bufferlist bl;
 
-
+    /* read buffer */
     bufferlist results;
     int retVals;
 
-
+    /* checksum */
     bufferlist checksums;
     int checksumRetvals;
 
-
+    /* opExec */
     bufferlist execOut;
     int execOutRetVals;
 
-
+    /* omap keys & values */
     set<string> omapKeys;
     map<string, bufferlist> omap;
     bufferlist header;
 
-
+    /* xattr */
     map<string, bufferlist> xattrs;
 
 public:
     RadosObjectReadOp(const string& pool, const string &oid)
       : RadosObjectOperation(BATCH_READ_OP, pool, oid) {
-
+          
     }
 
     RadosObjectReadOp(const int64_t poolId, const string &oid)
       : RadosObjectOperation(BATCH_READ_OP, poolId, oid) {
-
+        
     }
 
     ~RadosObjectReadOp() {
@@ -171,12 +171,12 @@ public:
 class RadosObjectWriteOp : public RadosObjectOperation {
 public:
     librados::ObjectWriteOperation op;
-    bool isRemove;
+    bool       isRemove;
     bufferlist bl;
 public:
-    RadosObjectWriteOp(const string& pool, const string& oid)
+    RadosObjectWriteOp(const string& pool, const string &oid)
       : RadosObjectOperation(BATCH_WRITE_OP, pool, oid), isRemove(false) {
-
+        
     }
 
     RadosObjectWriteOp(const int64_t poolId, const string &oid)
@@ -193,7 +193,7 @@ struct Completion {
     userCallback_t fn;
     void *cbArg;
 public:
-    Completion(userCallback_t _fn, void *arg) : fn(_fn),cbArg(arg) {
+    Completion(userCallback_t _fn, void *arg): fn(_fn), cbArg(arg) {
 
     }
 

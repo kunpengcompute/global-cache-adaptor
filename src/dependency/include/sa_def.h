@@ -5,8 +5,8 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *	http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -39,10 +39,10 @@ constexpr int GCACHE_READ = 2;
 
 constexpr int SA_QOS_MAX_NUM = 200;
 
-constexpr int SA_VERSION = 1;
+constexpr int SA_VERSION = 1;       // 版本号
 enum {
-    FORMAT_UNSPECIFY_MD_DATE_POOL = 0,
-    FORMAT_SPECIFY_MD_DATE_POOL = 1,
+    FORMAT_UNSPECIFY_MD_DATE_POOL = 0,        // 未指定数据池
+    FORMAT_SPECIFY_MD_DATE_POOL = 1,       // 指定了数据池
 };
 
 struct OptionsType {
@@ -55,20 +55,20 @@ struct OptionsLength {
 };
 
 typedef struct {
-    uint32_t poolId;
-    uint64_t head;
-    uint64_t seq : 40;
-    uint64_t format : 8;
-    uint64_t version : 8;
-    uint64_t reserve : 8;
+    uint32_t poolId;            // 4 bytes, data_pool_id if FORMAT_DIFF_MD_DATE_POOL
+    uint64_t head;     // 8 bytes
+    uint64_t seq : 40;            // 5 bytes
+    uint64_t format : 8;          // 1 byte
+    uint64_t version : 8;           // 1 byte
+    uint64_t reserve : 8;        // 预留
 } __attribute__((packed, aligned(4))) RbdObjid;
 
 struct OpRequestOps {
-    uint64_t opSubType {0};
+    uint64_t opSubType { 0 };
 
     std::string objName {};
-    bool isRbd { false };
-    RbdObjid rbdObjId;
+    bool isRbd { false }; // true: is RBD object  false: is RGW object
+    RbdObjid rbdObjId;    // 20 bytes
 
     char *inData { nullptr };
 
@@ -84,10 +84,10 @@ struct OpRequestOps {
 
     uint32_t opFlags {0};
 
-    std::vector<std::string> keys {};
-    
-    std::vector<std::string> values {};
-    std::vector<int> subops {};
+    std::vector<std::string> keys {}; // keys of "attr" and "omap"
+
+    std::vector<std::string> values {}; // values of "attr" and "omap"
+    std::vector<int> subops {};         // omap compare oprator
 
     std::vector<uint64_t> u64vals {};
     std::vector<int> cmpModes {};
@@ -99,7 +99,7 @@ struct SaOpReq {
 
     uint32_t optionType { 0 };
     uint64_t optionLength { 0 };
-    uint64_t opType { 0 };
+    uint64_t opType { 0 }; // OpType, pool or object
 
     uint64_t snapId { 0 };
 
@@ -147,16 +147,16 @@ struct SaOpReq {
 
     SaOpReq(const struct SaOpReq &other)
     {
-        optionType=other.optionType;
+        optionType = other.optionType;
         optionLength = other.optionLength;
-        opType=other.opType;
-        snapId=other.snapId;
-        opsSequence=other.opsSequence;
-        ptrMosdop=other.ptrMosdop;
+        opType = other.opType;
+        snapId = other.snapId;
+        opsSequence = other.opsSequence;
+        ptrMosdop = other.ptrMosdop;
         tid = other.tid;
-        ptId=other.ptId;
-        poolId=other.poolId;
-        ts=other.ts;
+        ptId = other.ptId;
+        poolId = other.poolId;
+        ts = other.ts;
         snapSeq = other.snapSeq;
         snaps = other.snaps;
         exitsCopyUp = other.exitsCopyUp;
@@ -200,6 +200,7 @@ struct SaBatchKeys {
 struct SaWcacheQosInfo {
     uint16_t ptNum;
     uint32_t writeRatio;
+    uint32_t isGc;
     uint16_t ptList[SA_QOS_MAX_NUM];
     uint32_t ptUseRatio[SA_QOS_MAX_NUM];
 };
@@ -210,4 +211,3 @@ constexpr int GetQosMaxNum()
 }
 
 #endif
-

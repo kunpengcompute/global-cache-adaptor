@@ -1,4 +1,4 @@
-﻿#include <vector>
+#include <vector>
 #include <regex>
 #include <thread>
 #include <mutex>
@@ -15,12 +15,12 @@ using namespace std;
 using namespace librados;
 
 std::string poolNamePattern = "\\s*(\\S*)\\s*";
-std::string poolIdPattern   = "(\\d+)\\s+";
-std::string storedPattern    = "([0-9]+\\.?[0-9]*)\\s(TiB|GiB|MiB|KiB|B)*\\s*";
-std::string objectsPattern  = "([0-9]+\\.?[0-9]*)(k|M)*\\s*";
-std::string usedPattern     = "([0-9]*\\.?[0-9]*)\\s(TiB|GiB|MiB|KiB|B)*\\s*";
+std::string poolIdPattern = "(\\d+)\\s+";
+std::string storedPattern = "([0-9]+\\.?[0-9]*)\\s(TiB|GiB|MiB|KiB|B)*\\s*";
+std::string objectsPattern = "([0-9]+\\.?[0-9]*)(k|M)*\\s*";
+std::string usedPattern = "([0-9]*\\.?[0-9]*)\\s(TiB|GiB|MiB|KiB|B)*\\s*";
 std::string usedRatioPattern = "([0-9]*\\.?[0-9]*)\\s*";
-std::string availPattern    = "([0-9]*\\.?[0-9]*)\\s(TiB|GiB|MiB|KiB|B).*";
+std::string availPattern = "([0-9]*\\.?[0-9]*)\\s(TiB|GiB|MiB|KiB|B).*";
 uint32_t defaultStripeUnit = 4096;
 int defaultECKInReplica = 1;
 int defaultECMInReplica = 2;
@@ -69,14 +69,14 @@ int32_t PoolUsageStat::GetPoolUsageInfo(uint32_t poolId, PoolUsageInfo *poolInfo
 {
     if (poolInfo == NULL) {
         ProxyDbgLogErr("poolInfo is NULL");
-	return -22;
+        return -22;
     }
 
     mutex.lock_shared();
     std::map<uint32_t, PoolUsageInfo>::iterator iter = poolInfoMap.find(poolId);
     if (iter == poolInfoMap.end()) {
         mutex.unlock_shared();
-	return -1;
+        return -1;
     }
 
     poolInfo->storedSize = iter->second.storedSize;
@@ -97,18 +97,18 @@ int32_t PoolUsageStat::GetPoolAllUsedAndAvail(uint64_t &usedSize, uint64_t &maxA
     mutex.lock_shared();
     std::map<uint32_t, PoolUsageInfo>::iterator iter = poolInfoMap.begin();
     if (iter != poolInfoMap.end()) {
-        maxAvail = iter->second.maxAvail;
+        maxAvail = iter->second.maxAvail; // 取第一个
     }
 
     for (; iter != poolInfoMap.end(); iter++) {
-        usedSize += iter->second.usedSize;
+        usedSize += iter->second.usedSize; // 叠加
         if (maxAvail == 0 && iter->second.maxAvail != 0) {
-	        maxAvail = iter->second.maxAvail;
+            maxAvail = iter->second.maxAvail;
         }
     }
-mutex.unlock_shared();
+    mutex.unlock_shared();
 
-return 0;
+    return 0;
 }
 
 int32_t PoolUsageStat::GetPoolInfo(uint32_t poolId, struct PoolInfo *info)
@@ -194,6 +194,7 @@ int32_t PoolUsageStat::GetECProfileSize(std::string profileName, uint32_t &k, ui
         return -ENOMEM;
     }
     strcpy(strs, outbl.c_str());
+
     char *savep;
     char *p = strtok_r(strs, "\n", &savep);
     while (p) {
@@ -251,7 +252,7 @@ uint32_t PoolUsageStat::GetDefaultECStripeUnit()
 
     librados::Rados *rados = static_cast<librados::Rados *>(proxy->radosClient);
     std::string cmd("{\"prefix\": \"config get\", \"who\": "    \
-        "\"osd.-1\", \"key\": \"osd_pool_erasure_code_stripe_unit\"}");
+                    "\"osd.-1\", \"key\": \"osd_pool_erasure_code_stripe_unit\"}");
     std::string outs;
     bufferlist inbl;
     bufferlist outbl;
@@ -262,7 +263,8 @@ uint32_t PoolUsageStat::GetDefaultECStripeUnit()
     }
 
     string unit = outbl.to_str();
-    unit.replace(unit.find("\n"), 1, "");
+    unit.replace(unit.find("\n"), 1, "");           // replace '\n'
+
     TransStrToNum(unit, num);
     if (num != 0) {
         stripeUnit = static_cast<uint32_t>(num);
@@ -271,7 +273,7 @@ uint32_t PoolUsageStat::GetDefaultECStripeUnit()
     return stripeUnit;
 }
 
-int32_t PoolUsageStat::GetPoolReplicationSize(uint32_t poolId, double& rep)
+int32_t PoolUsageStat::GetPoolReplicationSize(uint32_t poolId, double &rep)
 {
     rados_ioctx_t ioctx = proxy->GetIoCtx2(poolId);
     if (ioctx == NULL) {
@@ -319,14 +321,14 @@ static int StrToInt(const char *src, int &dest, const char *print)
     return 0;
 }
 
-int32_t PoolUsageStat::ParseToRecordInfo(std::smatch& result, struct RecordInfo &info)
+int32_t PoolUsageStat::ParseToRecordInfo(std::smatch &result, struct RecordInfo &info)
 {
-    //
+    // 忽略整体匹配的那一个
     for (size_t i = 1; i < result.size(); i++) {
-        if (i == 1) {
+        if (i == 1) {   // poolName
             info.poolName = result[i].str().c_str();
         }
-        if (i == 2) {
+        if (i == 2) { // poolID
             int id;
             if (StrToInt(result[i].str().c_str(), id, "poolId") != 0) {
                 return -1;
@@ -335,17 +337,17 @@ int32_t PoolUsageStat::ParseToRecordInfo(std::smatch& result, struct RecordInfo 
                 return -1;
             }
             info.poolId = (uint32_t)id;
-        } else if (i == 3) {
-            if (StrToDouble(result[i].str().c_str(), info.storedSize, "storedSize") != 0) {
+        } else if (i == 3) { // storedSize
+            if(StrToDouble(result[i].str().c_str(), info.storedSize, "storedSize") != 0) {
                 return -1;
             }
-        } else if (i == 4) {
+        } else if (i == 4) { // storedSize 单位
             info.storedSizeUnit = TransStrUnitToNum(result[i].str().c_str());
-        } else if (i == 5) {
-            if (StrToDouble(result[i].str().c_str(), info.objectsNum, "objectsNum") != 0) {
+        } else if (i == 5) { // 对象数量
+            if(StrToDouble(result[i].str().c_str(), info.objectsNum, "objectsNum") != 0) {
                 return -1;
             }
-        } else if (i == 6) {
+        } else if (i == 6) { // 单位/量级
             if (result[i].length() == 0) {
                 info.numUnit = 1;
             } else if (strcmp(result[i].str().c_str(), "k") == 0) {
@@ -353,21 +355,21 @@ int32_t PoolUsageStat::ParseToRecordInfo(std::smatch& result, struct RecordInfo 
             } else if (strcmp(result[i].str().c_str(), "m") == 0) {
                 info.numUnit = 1024 * 1024;
             }
-        } else if (i == 7) {
-            if (StrToDouble(result[i].str().c_str(), info.usedSize, "usedSize") != 0) {
+        } else if (i == 7) { // usedSize
+            if(StrToDouble(result[i].str().c_str(), info.usedSize, "usedSize") != 0) {
                 return -1;
             }
-        } else if (i == 8) {
+        } else if (i == 8) { // usedSize单位
             info.usedSizeUnit = TransStrUnitToNum(result[i].str().c_str());
-        } else if (i == 9) {
-            if (StrToDouble(result[i].str().c_str(), info.useRatio, "useRatio") != 0) {
+        } else if (i == 9) { // useRatio
+            if(StrToDouble(result[i].str().c_str(), info.useRatio, "useRatio") != 0) {
                 return -1;
             }
-        } else if (i == 10) {
-            if (StrToDouble(result[i].str().c_str(), info.maxAvail, "maxAvail") != 0) {
+        } else if (i == 10) { // maxAvail
+            if(StrToDouble(result[i].str().c_str(), info.maxAvail, "maxAvail") != 0) {
                 return -1;
             }
-        } else if (i == 11) {
+        } else if (i == 11) { // maxAvail单位
             info.maxAvailUnit = TransStrUnitToNum(result[i].str().c_str());
         }
     }
@@ -376,7 +378,6 @@ int32_t PoolUsageStat::ParseToRecordInfo(std::smatch& result, struct RecordInfo 
         ProxyDbgLogErr("judge EC pool failed, poolId=%u", info.poolId);
         return -1;
     }
-
     return 0;
 }
 
@@ -401,7 +402,7 @@ int32_t PoolUsageStat::CalPoolSize(struct RecordInfo &info)
         }
         ret = GetPoolReplicationSize(info.poolId, info.rep);
         if (ret != 0) {
-            ProxyDbgLogErr("get replication size failed, poolId=%u", info.poolId);
+            ProxyDbgLogErr("get replicaiton size failed, poolId=%u", info.poolId);
             return -1;
         }
     }
@@ -468,7 +469,7 @@ void PoolUsageStat::Compare()
     std::map<uint32_t, PoolUsageInfo>::iterator iter = poolInfoMap.begin();
     for (; iter != poolInfoMap.end(); iter++) {
         if (find(poolList.begin(), poolList.end(), iter->first) == poolList.end()) {
-            //
+            // 加入到删除队列中
             deletedPool.push_back(iter->first);
         }
     }
@@ -484,8 +485,9 @@ void PoolUsageStat::Compare()
 static int GetPoolStorageUsage(PoolUsageStat *mgr, const char *input)
 {
     std::string pattern = poolNamePattern + poolIdPattern + storedPattern + objectsPattern + usedPattern +
-	                  usedRatioPattern + availPattern;
+        usedRatioPattern + availPattern;
     char *strs = nullptr;
+
     std::vector<string> infoVector;
     strs = new(std::nothrow) char[strlen(input) + 1];
     if (strs == nullptr) {
@@ -493,35 +495,36 @@ static int GetPoolStorageUsage(PoolUsageStat *mgr, const char *input)
         return -ENOMEM;
     }
     strcpy(strs, input);
+
     char *savep;
     char *p = strtok_r(strs, "\n", &savep);
     while (p) {
         string s = p;
-	    infoVector.push_back(s);
-	    p = strtok_r(nullptr, "\n", &savep);
+        infoVector.push_back(s);
+        p = strtok_r(nullptr, "\n", &savep);
     }
 
     for (size_t i = 0; i < infoVector.size(); i++) {
         std::regex expression(pattern);
-	    std::smatch result;
-	    bool flag = std::regex_match(infoVector[i], result, expression);
-	    if (flag) {
-	        int32_t ret = mgr->Record(result);
-	        if (ret != 0) {
-	            ProxyDbgLogErr("record pool useage info failed.");
+        std::smatch result;
+        bool flag = std::regex_match(infoVector[i], result, expression);
+        if (flag) {
+            int32_t ret = mgr->Record(result);
+            if (ret != 0) {
+                ProxyDbgLogErr("record pool useage info failed.");
                 if (strs != nullptr) {
                     delete[] strs;
                     strs = nullptr;
                 }
                 return -1;
-	        }
-	    }
+            }
+        }
     }
     mgr->Compare();
 
     if (strs != nullptr) {
-	delete[] strs;
-	strs = nullptr;
+        delete[] strs;
+        strs = nullptr;
     }
 
     return 0;
@@ -529,7 +532,7 @@ static int GetPoolStorageUsage(PoolUsageStat *mgr, const char *input)
 
 int32_t PoolUsageStat::ReportPoolNewAndDel(std::vector<uint32_t> &newPools)
 {
-    //
+    // 向CCM上报新创建的Pool
     int32_t ret = ccm_adaptor->ReportCreatePool(newPools);
     if (ret != 0) {
         ProxyDbgLogErr("report create pool failed.");
@@ -570,14 +573,14 @@ int PoolUsageStat::UpdatePoolUsage(void)
         return ret;
     }
 
-    //
+    // 更新PoolUsage表
     ret = GetPoolStorageUsage(this, outbl.c_str());
     if (ret != 0) {
         ProxyDbgLogErr("get pool storage usage failed: %d", ret);
         return -1;
     }
 
-    //
+    // 更新PoolList
     ret = UpdatePoolList();
     if (ret != 0) {
         ProxyDbgLogErr("get pool storage usage failed: %d", ret);
@@ -617,15 +620,15 @@ static void PoolUsageTimer(PoolUsageStat *poolUsageManager)
 {
     while (true) {
         if (poolUsageManager->isStop()) {
-	    break;
-	}
+            break;
+        }
 
-	int32_t ret = poolUsageManager->UpdatePoolUsage();
+        int32_t ret = poolUsageManager->UpdatePoolUsage();
         if (ret != 0) {
             ProxyDbgLogErr("update pool usage failed.");
-	}
+        }
 
-	sleep(poolUsageManager->GetTimeInterval());
+        sleep(poolUsageManager->GetTimeInterval());
     }
 }
 
@@ -636,6 +639,7 @@ void PoolUsageStat::Start()
         ProxyDbgLogErr("Allocate ClusterManagerAdaptor faild.");
         return;
     }
+
     int32_t ret = UpdatePoolUsage();
     if (ret != 0) {
         ProxyDbgLogErr("get pool usage failed: %d", ret);

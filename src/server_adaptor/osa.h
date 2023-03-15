@@ -1,6 +1,6 @@
 /* License:LGPL-2.1
  *
- * Copyright (c) 2021 Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2021 Huawei Technologies Co., Ltd All rights reserved.
  *
  */
 
@@ -26,10 +26,10 @@ OSA_API_PUBLIC int OSA_FinishCacheOps(void *p, unsigned long int t, unsigned lon
 OSA_API_PUBLIC void OSA_ProcessBuf(const char *buf, unsigned int len, int cnt, void *p);
 
 OSA_API_PUBLIC void OSA_EncodeOmapGetkeys(const SaBatchKeys *batchKeys, int i, void *p);
-OSA_API_PUBLIC void OSA_EncodeOmapGetvals(const SaBatchKv *KVs, int i,void *p);
+OSA_API_PUBLIC void OSA_EncodeOmapGetvals(const SaBatchKv *KVs, int i, void *p);
 OSA_API_PUBLIC void OSA_EncodeOmapGetvalsbykeys(const SaBatchKv *keyValue, int i, void *p);
 OSA_API_PUBLIC void OSA_EncodeRead(uint64_t opType, unsigned int offset, unsigned int len, char *buf,
-	unsigned int bufLen, int i, void *p);
+    unsigned int bufLen, int i, void *p);
 OSA_API_PUBLIC void OSA_SetOpResult(int i, int32_t ret, void *p);
 OSA_API_PUBLIC void OSA_EncodeXattrGetxattr(const SaBatchKv *keyValue, int i, void *p);
 OSA_API_PUBLIC void OSA_EncodeXattrGetxattrs(const SaBatchKv *keyValue, int i, void *p);

@@ -1,18 +1,18 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index f068082..567ea3f 100644
+index f068082a..8c0c8199 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 3.5.1)
  project(ceph CXX C ASM)
  set(VERSION 14.2.8)
  
-+link_directories(/opt/gcache_adaptor_compile/third_part/lib/)
-+include_directories(/opt/gcache_adaptor_compile/third_part/inc/)
++link_directories(/usr/local/gcache_adaptor/lib/)
++include_directories(/usr/local/gcache_adaptor/inc/)
  if(POLICY CMP0028)
    cmake_policy(SET CMP0028 NEW)
  endif()
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
-index 28ec983..40090cb 100644
+index 28ec9835..40090cb9 100644
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
 @@ -394,10 +394,10 @@ if(WITH_DPDK)
@@ -29,7 +29,7 @@ index 28ec983..40090cb 100644
  set_target_properties(ceph-common PROPERTIES
    SOVERSION 0
 diff --git a/src/msg/async/PosixStack.cc b/src/msg/async/PosixStack.cc
-index e9c8d40..527c635 100644
+index e9c8d404..56fb7025 100644
 --- a/src/msg/async/PosixStack.cc
 +++ b/src/msg/async/PosixStack.cc
 @@ -13,7 +13,6 @@
@@ -82,13 +82,13 @@ index e9c8d40..527c635 100644
 +
 +    if (r == 0) {
 +      if (is_handShaked == false) {
-+          int ret = SSL_connect(ssl);
-+          if (ret > 0) {
-+              is_handShaked = true;
-+              ldout(cct, 20) << " TLS Socket " << _fd << " reconnect success" << dendl;
-+          } else {
-+              ldout(cct, 20) << " Socket " << _fd << " reconnect success, but TLS Socket reconnect failed" << dendl;
-+          }
++            int ret = SSL_connect(ssl);
++            if (ret > 0) {
++                is_handShaked = true;
++                ldout(cct, 20) << " TLS Socket " << _fd << " reconnect success"<< dendl;
++            } else {
++                ldout(cct, 20) << " socket " << _fd << " reconnect success, but TLS Socket reconnect failed"<< dendl;
++            }
 +      }
 +      connected = true;
 +      return 1;
@@ -154,7 +154,7 @@ index e9c8d40..527c635 100644
 +      if (read_errno == 11) {
 +        ldout(cct, 4) << "TLS read fail, r = " <<  r << "  errno = " << read_errno << "len = "  << len << "fd: " << _fd << "ssl_errno: "<< ssl_errno << " ssl_errno_str: " << error_string <<dendl;
 +      } else {
-+     	 lderr(cct) << "TLS read fail, r = " <<  r << "  errno = " << read_errno  << "len = " << len << "fd: " << _fd << "ssl_errno: "<< ssl_errno << " ssl_errno_str: " << error_string  <<dendl;
++      	lderr(cct) << "TLS read fail, r = " <<  r << "  errno = " << read_errno  << "len = " << len << "fd: " << _fd << "ssl_errno: "<< ssl_errno << " ssl_errno_str: " << error_string  <<dendl;
 +      }
 +      if (ssl_errno == SSL_ERROR_ZERO_RETURN) {
 +      	r = 0;
@@ -163,14 +163,14 @@ index e9c8d40..527c635 100644
 +      }
 +      return r;
 +    }
-+    ldout(cct, 5) << " TLS read successful, fd=" << _fd << " r = " << r << dendl;
++    ldout(cct, 5) << " TLS read successful, fd=" << _fd << " r = " <<  r << dendl;
 +    return r;
 +  }
 +
 +  ssize_t do_sendmsg(int fd, struct msghdr &msg, unsigned len, bool more, SSL* ssl)
 +  {
 +    char* tempBuffer = (char*)malloc(len);
-+    char *cur;
++    char* cur;
 +    if (tempBuffer == nullptr) {
 +      return -1;
 +    }
@@ -203,7 +203,7 @@ index e9c8d40..527c635 100644
 +                continue;
 +            } else if (write_errno == EAGAIN || ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
 +                ldout(cct, 4) << "TLS write fail, r = " <<  r << "   errno = " << write_errno << " fd: " << _fd << " ssl_errno: "<< ssl_err << " ssl_errno_str: " << error_string <<dendl;
-+                free(tempBuffer);
++                free (tempBuffer);
 +                return (ssize_t)sent;
 +            } else {
 +                lderr(cct) << __func__ << " TLS sent failed r = " << r << " ssl_errno: " <<  ssl_err << " errno: "<< write_errno << " fd: " << _fd << " ssl_errno_str: " << error_string << dendl;
@@ -216,7 +216,7 @@ index e9c8d40..527c635 100644
 +      cur += r;
 +      remain -= r;
 +    }
-+    ldout(cct, 5) << " TLS write successful, fd=" << fd << " r = " << sent << dendl;
++    ldout(cct, 5) << " TLS write successful, fd=" << fd << " r = " <<  sent << dendl;
 +    free (tempBuffer);
 +    return (ssize_t)sent;
 +  }
@@ -366,7 +366,7 @@ index e9c8d40..527c635 100644
    socklen_t slen = sizeof(ss);
    int sd = accept_cloexec(_fd, (sockaddr*)&ss, &slen);
    if (sd < 0) {
-+    ldout(cct, 3) << " accept_cloexec failed " << " errno:  "<<  errno  << dendl;
++    ldout(cct, 3) << " accept_cloexec failed " <<  " errno:  "<<  errno  << dendl;
      return -errno;
    }
  
@@ -402,7 +402,7 @@ index e9c8d40..527c635 100644
 -  *sock = ConnectedSocket(std::move(csi));
 -  return 0;
 -}
-+  if (certParamInit(&certParam) != 0) {
++  if (CertParamInit(&certParam) != 0) {
 +    lderr(cct) << " cert param init failed" << " abort" << dendl;
 +    ceph_abort();
 +  }
@@ -496,7 +496,7 @@ index e9c8d40..527c635 100644
 +      is_handShaked = true;
 +      ldout(cct, 3) << "ssl connect success fd: " <<  sd  << "connect port: "  << addr.get_port() << dendl;
 +    } else {
-+      ldout(cct, 3) << "ssl connect skip fd=" << sd << " headshake=" << is_handShaked << dendl;
++        ldout(cct, 3) << "ssl connect skip fd=" << sd << " headshake=" << is_handShaked << dendl;
 +    }
 +
 +    *socket = ConnectedSocket(
@@ -509,7 +509,7 @@ index e9c8d40..527c635 100644
  }
  
 diff --git a/src/msg/async/PosixStack.h b/src/msg/async/PosixStack.h
-index f1aaccd..0a240b2 100644
+index f1aaccd4..0a240b23 100644
 --- a/src/msg/async/PosixStack.h
 +++ b/src/msg/async/PosixStack.h
 @@ -18,18 +18,31 @@
@@ -547,7 +547,7 @@ index f1aaccd..0a240b2 100644
  	     unsigned addr_slot,
  	     const SocketOptions &opt,
 diff --git a/src/msg/async/Stack.cc b/src/msg/async/Stack.cc
-index 8976c3c..7f7185d 100644
+index 8976c3cc..0ddff138 100644
 --- a/src/msg/async/Stack.cc
 +++ b/src/msg/async/Stack.cc
 @@ -29,6 +29,7 @@
@@ -576,24 +576,24 @@ index 8976c3c..7f7185d 100644
    ceph_assert(cct->_conf->ms_async_op_threads > 0);
  
 +  tlsParam = {0};
-+  if (certParamInit(&tlsParam) != 0) {
++  if (CertParamInit(&tlsParam) != 0) {
 +    lderr(cct) << __func__ << " tlsParam init failed "  << dendl;
 +  }
 +  ldout(cct, 3) << __func__ << " tlsParam init success "  << dendl;
 +  if (tlsParam.tlsStatus == 1) {
-+    if (checkCertTask(&tlsParam) != 0) {
-+      printf("check cert failed, exit\n");
-+      lderr(cct) << __func__ << " check cert failed "  << dendl;
-+      exit(1);
++    if (CheckCertTask(&tlsParam) != 0) {
++        printf("check cert failed, exit\n");
++        lderr(cct) << __func__ << " check cert failed " << dendl;
++        exit(1);
 +    }
-+    if (sslctxInit(&tlsParam, &ctx) != 0) {
++    if (SslctxInit(&tlsParam, &ctx) != 0) {
 +      printf("ctx init failed, exit\n");
 +      lderr(cct) << __func__ << " ctx init failed "  << dendl;
 +      exit(1);
 +    }
-+    if (backgroundCertMonitorInit(&tlsParam) != 0) {
-+      printf("init cert monitor thread failed, exit\n");
-+      lderr(cct) << __func__ << " init cert monitor thread failed "  << dendl;
++    if (BackgroundCertMonitorInit(&tlsParam) != 0) {
++        printf("init cert monitor thread failed, exit\n");
++        lderr(cct) << __func__ << " init cert monitor thread failed " << dendl;
 +    }
 +    SSL_CTX_set_mode(ctx, SSL_MODE_ENABLE_PARTIAL_WRITE);
 +    SSL_CTX_set_mode(ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
@@ -613,7 +613,7 @@ index 8976c3c..7f7185d 100644
      workers.push_back(w);
    }
 diff --git a/src/msg/async/Stack.h b/src/msg/async/Stack.h
-index a093dad..45415b1 100644
+index a093dadb..45415b17 100644
 --- a/src/msg/async/Stack.h
 +++ b/src/msg/async/Stack.h
 @@ -21,6 +21,7 @@
@@ -656,7 +656,7 @@ index a093dad..45415b1 100644
    // backend need to override this method if backend doesn't support shared
 diff --git a/src/msg/async/cert_ceph.h b/src/msg/async/cert_ceph.h
 new file mode 100644
-index 0000000..a60ea0a
+index 00000000..863fec53
 --- /dev/null
 +++ b/src/msg/async/cert_ceph.h
 @@ -0,0 +1,62 @@
@@ -710,10 +710,10 @@ index 0000000..a60ea0a
 +    int32_t certCheckWarnningDays;
 +} certParam_t;
 +
-+int32_t certParamInit(certParam_t *param);
-+int32_t checkCertTask(certParam_t *param);
-+int32_t sslctxInit(certParam_t *param, SSL_CTX **ctx);
-+int32_t backgroundCertMonitorInit(certParam_t *param);
++int32_t CertParamInit(certParam_t *param);
++int32_t CheckCertTask(certParam_t *param);
++int32_t SslctxInit(certParam_t *param, SSL_CTX **ctx);
++int32_t BackgroundCertMonitorInit(certParam_t *param);
 +
 +#define MAX_CONNECT_COUNT 40960
 +

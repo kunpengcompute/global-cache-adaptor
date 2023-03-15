@@ -3,7 +3,7 @@
 
 /*
  * 2021.08.28 - Modify Indentation.
- * 		Huawei Technologies Co., Ltd.<foss@huawei.com>
+ *              Huawei Technologies Co., Ltd.<foss@huawei.com>
  */
 
 #ifndef CEPH_CLASSHANDLER_H
@@ -21,110 +21,110 @@ public:
     CephContext *cct;
 
     struct ClassData;
-    
+
     struct ClassMethod {
-	struct ClassHandler::ClassData *cls;
-	string name;
-	int flags;
-	cls_method_call_t func;
-	cls_method_cxx_call_t cxx_func;
-	
-	int exec(cls_method_context_t ctx, bufferlist &indata, bufferlist &outdata);
-	void unregister();
+        struct ClassHandler::ClassData *cls;
+        string name;
+        int flags;
+        cls_method_call_t func;
+        cls_method_cxx_call_t cxx_func;
 
-	int get_flags()
-	{	
-		std::lock_guard l(cls->handler->mutex);
-		return flags;
-	}
+        int exec(cls_method_context_t ctx, bufferlist &indata, bufferlist &outdata);
+        void unregister();
 
-	ClassMethod() : cls(0), flags(0), func(0), cxx_func(0) {}
+        int get_flags()
+        {
+            std::lock_guard l(cls->handler->mutex);
+            return flags;
+        }
+
+        ClassMethod() : cls(0), flags(0), func(0), cxx_func(0) {}
     };
 
-   struct ClassFilter {
-	struct ClassHandler::ClassData *cls = nullptr;
-	std::string name;
-	cls_cxx_filter_factory_t fn;
+    struct ClassFilter {
+        struct ClassHandler::ClassData *cls = nullptr;
+        std::string name;
+        cls_cxx_filter_factory_t fn;
 
-	void unregister();
-	
-	ClassFilter() : fn(0) {}
-   };
+        void unregister();
 
-   struct ClassData {
-	enum Status {
-	  CLASS_UNKNOWN,
-          CLASS_MISSING,   //missing 
-	  CLASS_MISSING_DEPS,  //missing dependencies
-	  CLASS_INITIALIZING,  //calling init() right now
-	  CLASS_OPEN,          //initialized,usable
-	} status;
+        ClassFilter() : fn(0) {}
+    };
 
-	string name;
-	ClassHandler *handler;
-	void *handle;
-	
-	bool whitelisted = false;
+    struct ClassData {
+        enum Status {
+            CLASS_UNKNOWN,
+            CLASS_MISSING,      // missing
+            CLASS_MISSING_DEPS, // missing dependencies
+            CLASS_INITIALIZING, // calling init() right now
+            CLASS_OPEN,         // initialized, usable
+        } status;
 
-	map<string, ClassMethod>methods_map;
-	map<string, ClassFilter>filters_map;
+        string name;
+        ClassHandler *handler;
+        void *handle;
 
-	set<ClassData *> dependencies;         
-	set<ClassData *> missing_dependencies;
+        bool whitelisted = false;
 
-	ClassMethod *_get_method(const char *mname);
-	
-	ClassData() : status(CLASS_UNKNOWN), handler(NULL), handle(NULL) {}
-	~ClassData() {}
+        map<string, ClassMethod> methods_map;
+        map<string, ClassFilter> filters_map;
 
-	ClassMethod *register_method(const char *mname, int flags, cls_method_call_t func);
-	ClassMethod*register_cxx_method(const char *mname, int flags, cls_method_cxx_call_t func);
-	void unregister_method(ClassMethod *method);
+        set<ClassData *> dependencies;         /* our dependencies */
+        set<ClassData *> missing_dependencies; /* only missing dependencies */
 
-	ClassFilter *register_cxx_filter(const std::string &filter_name, cls_cxx_filter_factory_t fn);
-	void unregister_filter(ClassFilter *method);
+        ClassMethod *_get_method(const char *mname);
 
-	ClassMethod *get_method(const char *mname)
-	{
-		std::lock_guard l(handler->mutex);
-		return _get_method(mname);
-	}
-	int get_method_flags(const char *mname);
+        ClassData() : status(CLASS_UNKNOWN), handler(NULL), handle(NULL) {}
+        ~ClassData() {}
 
-	ClassFilter *get_filter(const std::string &filter_name)
-	{
-		std::lock_guard l(handler->mutex);
-		std::map<std::string, ClassFilter>::iterator i = filters_map.find(filter_name);
-		if(i == filters_map.end()){
-			return NULL;
-		}else{
-			return &(i->second);
-		}
-	}
-};
+        ClassMethod *register_method(const char *mname, int flags, cls_method_call_t func);
+        ClassMethod *register_cxx_method(const char *mname, int flags, cls_method_cxx_call_t func);
+        void unregister_method(ClassMethod *method);
+
+        ClassFilter *register_cxx_filter(const std::string &filter_name, cls_cxx_filter_factory_t fn);
+        void unregister_filter(ClassFilter *method);
+
+        ClassMethod *get_method(const char *mname)
+        {
+            std::lock_guard l(handler->mutex);
+            return _get_method(mname);
+        }
+        int get_method_flags(const char *mname);
+
+        ClassFilter *get_filter(const std::string &filter_name)
+        {
+            std::lock_guard l(handler->mutex);
+            std::map<std::string, ClassFilter>::iterator i = filters_map.find(filter_name);
+            if (i == filters_map.end()) {
+                return NULL;
+            } else {
+                return &(i->second);
+            }
+        }
+    };
 
 private:
-	map<string, ClassData> classes;
+    map<string, ClassData> classes;
 
-	ClassData *_get_class(const string &cname, bool check_allowed);
-	int _load_class(ClassData *cls);
+    ClassData *_get_class(const string &cname, bool check_allowed);
+    int _load_class(ClassData *cls);
 
-	static bool in_class_list(const std::string &cname, const std::string &list);
+    static bool in_class_list(const std::string &cname, const std::string &list);
 
 public:
-	Mutex mutex;
+    Mutex mutex;
 
-	explicit ClassHandler(CephContext *cct_) : cct(cct_), mutex("ClassHandler") {}
+    explicit ClassHandler(CephContext *cct_) : cct(cct_), mutex("ClassHandler") {}
 
-	int open_all_classes();
+    int open_all_classes();
 
-	void add_embedded_class(const string &cname);
-	int open_class(const string &cname, ClassData **pcls);
+    void add_embedded_class(const string &cname);
+    int open_class(const string &cname, ClassData **pcls);
 
-	ClassData *register_class(const char *cname);
-	void unregister_class(ClassData *cls);
+    ClassData *register_class(const char *cname);
+    void unregister_class(ClassData *cls);
 
-	void shutdown();
+    void shutdown();
 };
 
 

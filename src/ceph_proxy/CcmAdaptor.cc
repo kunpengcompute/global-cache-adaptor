@@ -4,10 +4,10 @@
 
 int ClusterManagerAdaptor::ReportCreatePool(std::vector<uint32_t> &pools)
 {
-    uint32_t* poolArr = NULL;
+    uint32_t *poolArr = NULL;
     uint32_t len = pools.size();
     if (len != 0) {
-        poolArr = (uint32_t*)malloc(sizeof(uint32_t) * len);
+        poolArr = (uint32_t *)malloc(sizeof(uint32_t) * len);
         if (poolArr == NULL) {
             ProxyDbgLogErr("malloc poolArr failed.");
             return -1;
@@ -19,7 +19,7 @@ int ClusterManagerAdaptor::ReportCreatePool(std::vector<uint32_t> &pools)
         ProxyDbgLogDebug("notify pool[%u] create.", pools[i]);
     }
     if (notifyCreateFunc != NULL) {
-        int32_t ret = notifyCreateFunc(poolArr,len);
+        int32_t ret = notifyCreateFunc(poolArr, len);
         if (poolArr) {
             free(poolArr);
         }
@@ -30,7 +30,7 @@ int ClusterManagerAdaptor::ReportCreatePool(std::vector<uint32_t> &pools)
         return 0;
     }
 
-    if (poolArr) {
+    if (poolArr){
         free(poolArr);
     }
 
@@ -39,12 +39,12 @@ int ClusterManagerAdaptor::ReportCreatePool(std::vector<uint32_t> &pools)
 
 int ClusterManagerAdaptor::RegisterPoolCreateReportFn(NotifyPoolEventFn fn)
 {
-    if (fn == NULL) {
-        ProxyDbgLogErr("input argument is NULL");
-        return -1;
+    if (fn == nullptr) {
+        notifyCreateFunc = nullptr;
+        return 0;
     }
 
-    if (notifyCreateFunc != NULL) {
+    if (notifyCreateFunc != nullptr) {
         ProxyDbgLogErr("createFunc has already registered.");
         return -1;
     }
