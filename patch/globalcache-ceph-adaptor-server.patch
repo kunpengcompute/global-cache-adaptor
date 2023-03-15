@@ -1,31 +1,34 @@
-diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/CMakeLists.txt cephmod/ceph-14.2.8/CMakeLists.txt
---- cephnew/ceph-14.2.8/CMakeLists.txt	2020-03-03 01:49:20.000000000 +0800
-+++ cephmod/ceph-14.2.8/CMakeLists.txt	2022-12-15 16:07:09.633585300 +0800
-@@ -3,6 +3,8 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index f068082a..8c0c8199 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 3.5.1)
  project(ceph CXX C ASM)
  set(VERSION 14.2.8)
  
-+link_directories(/opt/gcache_adaptor_compile/third_part/lib/)
-+include_directories(/opt/gcache_adaptor_compile/third_part/inc/)
++link_directories(/usr/local/gcache_adaptor/lib/)
++include_directories(/usr/local/gcache_adaptor/inc/)
  if(POLICY CMP0028)
    cmake_policy(SET CMP0028 NEW)
  endif()
-diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/do_cmake.sh cephmod/ceph-14.2.8/do_cmake.sh
---- cephnew/ceph-14.2.8/do_cmake.sh	2020-03-03 01:49:20.000000000 +0800
-+++ cephmod/ceph-14.2.8/do_cmake.sh	2022-12-15 16:08:00.830663600 +0800
-@@ -44,7 +44,7 @@
+diff --git a/do_cmake.sh b/do_cmake.sh
+index 3dc25c8d..2512df61 100755
+--- a/do_cmake.sh
++++ b/do_cmake.sh
+@@ -44,7 +44,7 @@ if type cmake3 > /dev/null 2>&1 ; then
  else
      CMAKE=cmake
  fi
 -${CMAKE} -DCMAKE_BUILD_TYPE=Debug $ARGS "$@" .. || exit 1
-+${CMAKE} -DCMAKE_BUILD_TYPE=RelWithDebInfo $ARGS "$@" .. || exit 1
++${CMAKE} -DCMAKE_BUILD_TYPE=Release $ARGS "$@" .. || exit 1
  
  # minimal config to find plugins
  cat <<EOF > ceph.conf
-diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/CMakeLists.txt cephmod/ceph-14.2.8/src/CMakeLists.txt
---- cephnew/ceph-14.2.8/src/CMakeLists.txt	2020-03-03 01:49:20.000000000 +0800
-+++ cephmod/ceph-14.2.8/src/CMakeLists.txt	2022-12-15 20:47:58.511232300 +0800
-@@ -394,10 +394,10 @@
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 28ec9835..e3663978 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -394,10 +394,10 @@ if(WITH_DPDK)
  endif()
  
  add_library(common STATIC ${ceph_common_objs})
@@ -38,76 +41,34 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/CMakeLists.txt cephmod/
  # appease dpkg-shlibdeps
  set_target_properties(ceph-common PROPERTIES
    SOVERSION 0
-diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/cert_ceph.h cephmod/ceph-14.2.8/src/msg/async/cert_ceph.h
---- cephnew/ceph-14.2.8/src/msg/async/cert_ceph.h	1970-01-01 08:00:00.000000000 +0800
-+++ cephmod/ceph-14.2.8/src/msg/async/cert_ceph.h	2022-12-15 20:46:59.533438700 +0800
-@@ -0,0 +1,63 @@
-+/*
-+Copyright (c) 2021 Huawei Technologies Co., Ltd All rights reserved.
-+
-+Licensed under the Apache License, Version 2.0 (the "License");
-+you may not use this file except in compliance with the License.
-+You may obtain a copy of the License at
-+
-+	http://www.apache.org/licenses/LICENSE-2.0
-+
-+Unless required by applicable law or agreed to in writing, software
-+distributed under the License is distributed on an "AS IS" BASIS,
-+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-+See the License for the specific language governing permissions and
-+limitations under the License.
-+*/
+diff --git a/src/include/mempool.h b/src/include/mempool.h
+index 155ec18d..7a3e651d 100644
+--- a/src/include/mempool.h
++++ b/src/include/mempool.h
+@@ -246,11 +246,16 @@ public:
+ 
+   void adjust_count(ssize_t items, ssize_t bytes);
+ 
+-  shard_t* pick_a_shard() {
++  static size_t pick_a_shard_int() {
+     // Dirt cheap, see:
+-    //   http://fossies.org/dox/glibc-2.24/pthread__self_8c_source.html
++    //   https://fossies.org/dox/glibc-2.32/pthread__self_8c_source.html
+     size_t me = (size_t)pthread_self();
+-    size_t i = (me >> 3) & ((1 << num_shard_bits) - 1);
++    size_t i = (me >> CEPH_PAGE_SHIFT) & ((1 << num_shard_bits) - 1);
++    return i;
++  }
 + 
-+#ifndef _CERT_CEPH_H_
-+#define _CERT_CEPH_H_
-+
-+#include <openssl/ssl.h>
-+#include <openssl/err.h>
-+#include <openssl/x509.h>
-+#include <openssl/pem.h>
-+#include <openssl/evp.h>
-+
-+#ifdef __cplusplus
-+extern "C" {
-+#endif
-+
-+#define MAX_CIPHER_NAME 50
-+
-+typedef struct certParam {
-+    int8_t tlsStatus;
-+    int32_t tlsVersion;
-+    char tlsCipherList[MAX_CIPHER_NAME];
-+    char caFilePath[PATH_MAX];
-+    char keypassFilePath[PATH_MAX];
-+    char agentCertFilePath[PATH_MAX];
-+    char publicKeyFilePath[PATH_MAX];
-+    char privateKeyFilePath[PATH_MAX];
-+    char revokeCrlFilePath[PATH_MAX];
-+    char kmcPrimaryKsfPath[PATH_MAX];
-+    char kmcStandbyKsfPath[PATH_MAX];
-+    int32_t maxConnect;
-+    int32_t portIdStart;
-+    int32_t portIdEnd;
-+    int32_t certCheckPeriodDays;
-+    int32_t certCheckWarnningDays;
-+} certParam_t;
-+
-+int32_t certParamInit(certParam_t *param);
-+int32_t checkCertTask(certParam_t *param);
-+int32_t sslctxInit(certParam_t *param, SSL_CTX **ctx);
-+int32_t backgroundCertMonitorInit(certParam_t *param);
-+int32_t CheckIpIsInTrustList(const char *ipAddress);
-+
-+#define MAX_CONNECT_COUNT 40960
-+
-+#ifdef __cplusplus
-+}
-+#endif
-+
-+#endif
-diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc cephmod/ceph-14.2.8/src/msg/async/PosixStack.cc
---- cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc	2020-03-03 01:49:20.000000000 +0800
-+++ cephmod/ceph-14.2.8/src/msg/async/PosixStack.cc	2022-12-15 20:50:58.128015400 +0800
++  shard_t* pick_a_shard() {
++    size_t i = pick_a_shard_int();
+     return &shard[i];
+   }
+ 
+diff --git a/src/msg/async/PosixStack.cc b/src/msg/async/PosixStack.cc
+index e9c8d404..f400d392 100644
+--- a/src/msg/async/PosixStack.cc
++++ b/src/msg/async/PosixStack.cc
 @@ -13,7 +13,6 @@
   * Foundation.  See file COPYING.
   *
@@ -158,13 +119,13 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc
 +
 +    if (r == 0) {
 +      if (is_handShaked == false) {
-+          int ret = SSL_connect(ssl);
-+          if (ret > 0) {
-+              is_handShaked = true;
-+              ldout(cct, 20) << " TLS Socket " << _fd << " reconnect success" << dendl;
-+          } else {
-+              ldout(cct, 20) << " Socket " << _fd << " reconnect success, but TLS Socket reconnect failed" << dendl;
-+          }
++            int ret = SSL_connect(ssl);
++            if (ret > 0) {
++                is_handShaked = true;
++                ldout(cct, 20) << " TLS Socket " << _fd << " reconnect success"<< dendl;
++            } else {
++                ldout(cct, 20) << " socket " << _fd << " reconnect success, but TLS Socket reconnect failed"<< dendl;
++            }
 +      }
 +      connected = true;
 +      return 1;
@@ -230,7 +191,7 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc
 +      if (read_errno == 11) {
 +        ldout(cct, 4) << "TLS read fail, r = " <<  r << "  errno = " << read_errno << "len = "  << len << "fd: " << _fd << "ssl_errno: "<< ssl_errno << " ssl_errno_str: " << error_string <<dendl;
 +      } else {
-+     	 lderr(cct) << "TLS read fail, r = " <<  r << "  errno = " << read_errno  << "len = " << len << "fd: " << _fd << "ssl_errno: "<< ssl_errno << " ssl_errno_str: " << error_string  <<dendl;
++      	lderr(cct) << "TLS read fail, r = " <<  r << "  errno = " << read_errno  << "len = " << len << "fd: " << _fd << "ssl_errno: "<< ssl_errno << " ssl_errno_str: " << error_string  <<dendl;
 +      }
 +      if (ssl_errno == SSL_ERROR_ZERO_RETURN) {
 +      	r = 0;
@@ -239,14 +200,14 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc
 +      }
 +      return r;
 +    }
-+    ldout(cct, 5) << " TLS read successful, fd=" << _fd << " r = " << r << dendl;
++    ldout(cct, 5) << " TLS read successful, fd=" << _fd << " r = " <<  r << dendl;
 +    return r;
 +  }
 +
 +  ssize_t do_sendmsg(int fd, struct msghdr &msg, unsigned len, bool more, SSL* ssl)
 +  {
 +    char* tempBuffer = (char*)malloc(len);
-+    char *cur;
++    char* cur;
 +    if (tempBuffer == nullptr) {
 +      return -1;
 +    }
@@ -279,7 +240,7 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc
 +                continue;
 +            } else if (write_errno == EAGAIN || ssl_err == SSL_ERROR_WANT_READ || ssl_err == SSL_ERROR_WANT_WRITE) {
 +                ldout(cct, 4) << "TLS write fail, r = " <<  r << "   errno = " << write_errno << " fd: " << _fd << " ssl_errno: "<< ssl_err << " ssl_errno_str: " << error_string <<dendl;
-+                free(tempBuffer);
++                free (tempBuffer);
 +                return (ssize_t)sent;
 +            } else {
 +                lderr(cct) << __func__ << " TLS sent failed r = " << r << " ssl_errno: " <<  ssl_err << " errno: "<< write_errno << " fd: " << _fd << " ssl_errno_str: " << error_string << dendl;
@@ -292,7 +253,7 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc
 +      cur += r;
 +      remain -= r;
 +    }
-+    ldout(cct, 5) << " TLS write successful, fd=" << fd << " r = " << sent << dendl;
++    ldout(cct, 5) << " TLS write successful, fd=" << fd << " r = " <<  sent << dendl;
 +    free (tempBuffer);
 +    return (ssize_t)sent;
 +  }
@@ -371,7 +332,7 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc
  class PosixConnectedSocketImpl final : public ConnectedSocketImpl {
    NetHandler &handler;
    int _fd;
-@@ -45,7 +288,8 @@
+@@ -45,7 +288,8 @@ class PosixConnectedSocketImpl final : public ConnectedSocketImpl {
  
   public:
    explicit PosixConnectedSocketImpl(NetHandler &h, const entity_addr_t &sa, int f, bool connected)
@@ -381,7 +342,7 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc
  
    int is_connected() override {
      if (connected)
-@@ -68,13 +312,12 @@
+@@ -68,13 +312,12 @@ class PosixConnectedSocketImpl final : public ConnectedSocketImpl {
  
    ssize_t read(char *buf, size_t len) override {
      ssize_t r = ::read(_fd, buf, len);
@@ -397,7 +358,7 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc
    static ssize_t do_sendmsg(int fd, struct msghdr &msg, unsigned len, bool more)
    {
      size_t sent = 0;
-@@ -82,6 +325,7 @@
+@@ -82,6 +325,7 @@ class PosixConnectedSocketImpl final : public ConnectedSocketImpl {
        MSGR_SIGPIPE_STOPPER;
        ssize_t r;
        r = ::sendmsg(fd, &msg, MSG_NOSIGNAL | (more ? MSG_MORE : 0));
@@ -405,7 +366,7 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc
        if (r < 0) {
          if (errno == EINTR) {
            continue;
-@@ -169,16 +413,22 @@
+@@ -169,16 +413,22 @@ class PosixConnectedSocketImpl final : public ConnectedSocketImpl {
    friend class PosixNetworkStack;
  };
  
@@ -431,7 +392,7 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc
    void abort_accept() override {
      ::close(_fd);
    }
-@@ -188,23 +438,28 @@
+@@ -188,23 +438,28 @@ class PosixServerSocketImpl : public ServerSocketImpl {
  };
  
  int PosixServerSocketImpl::accept(ConnectedSocket *sock, const SocketOptions &opt, entity_addr_t *out, Worker *w) {
@@ -442,7 +403,7 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc
    socklen_t slen = sizeof(ss);
    int sd = accept_cloexec(_fd, (sockaddr*)&ss, &slen);
    if (sd < 0) {
-+    ldout(cct, 3) << " accept_cloexec failed " << " errno:  "<<  errno  << dendl;
++    ldout(cct, 3) << " accept_cloexec failed " <<  " errno:  "<<  errno  << dendl;
      return -errno;
    }
  
@@ -460,7 +421,7 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc
      return -errno;
    }
  
-@@ -212,15 +467,54 @@
+@@ -212,15 +467,54 @@ int PosixServerSocketImpl::accept(ConnectedSocket *sock, const SocketOptions &op
  
    out->set_type(addr_type);
    out->set_sockaddr((sockaddr*)&ss);
@@ -478,7 +439,7 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc
 -  *sock = ConnectedSocket(std::move(csi));
 -  return 0;
 -}
-+  if (certParamInit(&certParam) != 0) {
++  if (CertParamInit(&certParam) != 0) {
 +    lderr(cct) << " cert param init failed" << " abort" << dendl;
 +    ceph_abort();
 +  }
@@ -487,9 +448,9 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc
 -{
 +  if ((certParam.tlsStatus == 1) && (local_addr.get_port() >= 7880 && local_addr.get_port() <= 7889)) {
 +    if (!CheckIpIsInTrustList(out->ip_only_to_str().c_str())) {
-+      ldout(cct, 3) << "ip addr" << out->ip_only_to_str() << " check whitelist failed close fd" << dendl;
++      ldout(cct, 3) << "ip addr " << out->ip_only_to_str() << "  check whitelist failed close fd" << dendl;
 +      ::close(sd);
-+      return -1; 
++      return -1;
 +    }
 +    SSL *sslNew = SSL_new(ctx);
 +    if (sslNew == nullptr) {
@@ -521,7 +482,7 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc
  }
  
  int PosixWorker::listen(entity_addr_t &sa,
-@@ -232,7 +526,6 @@
+@@ -232,7 +526,6 @@ int PosixWorker::listen(entity_addr_t &sa,
    if (listen_sd < 0) {
      return -errno;
    }
@@ -529,7 +490,7 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc
    int r = net.set_nonblock(listen_sd);
    if (r < 0) {
      ::close(listen_sd);
-@@ -248,7 +541,7 @@
+@@ -248,7 +541,7 @@ int PosixWorker::listen(entity_addr_t &sa,
    r = ::bind(listen_sd, sa.get_sockaddr(), sa.get_sockaddr_len());
    if (r < 0) {
      r = -errno;
@@ -538,7 +499,7 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc
                     << ": " << cpp_strerror(r) << dendl;
      ::close(listen_sd);
      return r;
-@@ -264,13 +557,12 @@
+@@ -264,13 +557,12 @@ int PosixWorker::listen(entity_addr_t &sa,
  
    *sock = ServerSocket(
            std::unique_ptr<PosixServerSocketImpl>(
@@ -553,7 +514,7 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc
    if (opts.nonblock) {
      sd = net.nonblock_connect(addr, opts.connect_bind_addr);
    } else {
-@@ -282,8 +574,34 @@
+@@ -282,8 +574,34 @@ int PosixWorker::connect(const entity_addr_t &addr, const SocketOptions &opts, C
    }
  
    net.set_priority(sd, opts.priority, addr.get_family());
@@ -577,7 +538,7 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc
 +      is_handShaked = true;
 +      ldout(cct, 3) << "ssl connect success fd: " <<  sd  << "connect port: "  << addr.get_port() << dendl;
 +    } else {
-+      ldout(cct, 3) << "ssl connect skip fd=" << sd << " headshake=" << is_handShaked << dendl;
++        ldout(cct, 3) << "ssl connect skip fd=" << sd << " headshake=" << is_handShaked << dendl;
 +    }
 +
 +    *socket = ConnectedSocket(
@@ -589,9 +550,10 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.cc
    return 0;
  }
  
-diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.h cephmod/ceph-14.2.8/src/msg/async/PosixStack.h
---- cephnew/ceph-14.2.8/src/msg/async/PosixStack.h	2020-03-03 01:49:20.000000000 +0800
-+++ cephmod/ceph-14.2.8/src/msg/async/PosixStack.h	2022-12-15 16:07:09.651098500 +0800
+diff --git a/src/msg/async/PosixStack.h b/src/msg/async/PosixStack.h
+index f1aaccd4..0a240b23 100644
+--- a/src/msg/async/PosixStack.h
++++ b/src/msg/async/PosixStack.h
 @@ -18,18 +18,31 @@
  #define CEPH_MSG_ASYNC_POSIXSTACK_H
  
@@ -626,9 +588,10 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/PosixStack.h 
    int listen(entity_addr_t &sa,
  	     unsigned addr_slot,
  	     const SocketOptions &opt,
-diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/Stack.cc cephmod/ceph-14.2.8/src/msg/async/Stack.cc
---- cephnew/ceph-14.2.8/src/msg/async/Stack.cc	2020-03-03 01:49:20.000000000 +0800
-+++ cephmod/ceph-14.2.8/src/msg/async/Stack.cc	2022-12-15 16:07:09.655711100 +0800
+diff --git a/src/msg/async/Stack.cc b/src/msg/async/Stack.cc
+index 8976c3cc..0ddff138 100644
+--- a/src/msg/async/Stack.cc
++++ b/src/msg/async/Stack.cc
 @@ -29,6 +29,7 @@
  
  #include "common/dout.h"
@@ -637,7 +600,7 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/Stack.cc ceph
  
  #define dout_subsys ceph_subsys_ms
  #undef dout_prefix
-@@ -82,10 +83,10 @@
+@@ -82,10 +83,10 @@ std::shared_ptr<NetworkStack> NetworkStack::create(CephContext *c, const string
    return nullptr;
  }
  
@@ -650,29 +613,29 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/Stack.cc ceph
  #ifdef HAVE_RDMA
    else if (type == "rdma")
      return new RDMAWorker(c, i);
-@@ -105,6 +106,31 @@
+@@ -105,6 +106,31 @@ NetworkStack::NetworkStack(CephContext *c, const string &t): type(t), started(fa
  {
    ceph_assert(cct->_conf->ms_async_op_threads > 0);
  
 +  tlsParam = {0};
-+  if (certParamInit(&tlsParam) != 0) {
++  if (CertParamInit(&tlsParam) != 0) {
 +    lderr(cct) << __func__ << " tlsParam init failed "  << dendl;
 +  }
 +  ldout(cct, 3) << __func__ << " tlsParam init success "  << dendl;
 +  if (tlsParam.tlsStatus == 1) {
-+    if (checkCertTask(&tlsParam) != 0) {
-+      printf("check cert failed, exit\n");
-+      lderr(cct) << __func__ << " check cert failed "  << dendl;
-+      exit(1);
++    if (CheckCertTask(&tlsParam) != 0) {
++        printf("check cert failed, exit\n");
++        lderr(cct) << __func__ << " check cert failed " << dendl;
++        exit(1);
 +    }
-+    if (sslctxInit(&tlsParam, &ctx) != 0) {
++    if (SslctxInit(&tlsParam, &ctx) != 0) {
 +      printf("ctx init failed, exit\n");
 +      lderr(cct) << __func__ << " ctx init failed "  << dendl;
 +      exit(1);
 +    }
-+    if (backgroundCertMonitorInit(&tlsParam) != 0) {
-+      printf("init cert monitor thread failed, exit\n");
-+      lderr(cct) << __func__ << " init cert monitor thread failed "  << dendl;
++    if (BackgroundCertMonitorInit(&tlsParam) != 0) {
++        printf("init cert monitor thread failed, exit\n");
++        lderr(cct) << __func__ << " init cert monitor thread failed " << dendl;
 +    }
 +    SSL_CTX_set_mode(ctx, SSL_MODE_ENABLE_PARTIAL_WRITE);
 +    SSL_CTX_set_mode(ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
@@ -682,7 +645,7 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/Stack.cc ceph
    const int InitEventNumber = 5000;
    num_workers = cct->_conf->ms_async_op_threads;
    if (num_workers >= EventCenter::MAX_EVENTCENTER) {
-@@ -116,7 +142,7 @@
+@@ -116,7 +142,7 @@ NetworkStack::NetworkStack(CephContext *c, const string &t): type(t), started(fa
    }
  
    for (unsigned i = 0; i < num_workers; ++i) {
@@ -691,9 +654,10 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/Stack.cc ceph
      w->center.init(InitEventNumber, i, type);
      workers.push_back(w);
    }
-diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/Stack.h cephmod/ceph-14.2.8/src/msg/async/Stack.h
---- cephnew/ceph-14.2.8/src/msg/async/Stack.h	2020-03-03 01:49:20.000000000 +0800
-+++ cephmod/ceph-14.2.8/src/msg/async/Stack.h	2022-12-15 16:07:09.659767000 +0800
+diff --git a/src/msg/async/Stack.h b/src/msg/async/Stack.h
+index a093dadb..45415b17 100644
+--- a/src/msg/async/Stack.h
++++ b/src/msg/async/Stack.h
 @@ -21,6 +21,7 @@
  #include "common/perf_counters.h"
  #include "msg/msg_types.h"
@@ -702,7 +666,7 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/Stack.h cephm
  
  class Worker;
  class ConnectedSocketImpl {
-@@ -308,21 +309,27 @@
+@@ -308,21 +309,27 @@ class NetworkStack {
   protected:
    CephContext *cct;
    vector<Worker*> workers;
@@ -732,3 +696,72 @@ diff -Nura -x .git -x .gitignore cephnew/ceph-14.2.8/src/msg/async/Stack.h cephm
    // backend need to override this method if supports zero copy read
    virtual bool support_zero_copy_read() const { return false; }
    // backend need to override this method if backend doesn't support shared
+diff --git a/src/msg/async/cert_ceph.h b/src/msg/async/cert_ceph.h
+new file mode 100644
+index 00000000..a16fb61c
+--- /dev/null
++++ b/src/msg/async/cert_ceph.h
+@@ -0,0 +1,63 @@
++/*
++Copyright (c) 2021 Huawei Technologies Co., Ltd All rights reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++	http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++ 
++#ifndef _CERT_CEPH_H_
++#define _CERT_CEPH_H_
++
++#include <openssl/ssl.h>
++#include <openssl/err.h>
++#include <openssl/x509.h>
++#include <openssl/pem.h>
++#include <openssl/evp.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#define MAX_CIPHER_NAME 50
++
++typedef struct certParam {
++    int8_t tlsStatus;
++    int32_t tlsVersion;
++    char tlsCipherList[MAX_CIPHER_NAME];
++    char caFilePath[PATH_MAX];
++    char keypassFilePath[PATH_MAX];
++    char agentCertFilePath[PATH_MAX];
++    char publicKeyFilePath[PATH_MAX];
++    char privateKeyFilePath[PATH_MAX];
++    char revokeCrlFilePath[PATH_MAX];
++    char kmcPrimaryKsfPath[PATH_MAX];
++    char kmcStandbyKsfPath[PATH_MAX];
++    int32_t maxConnect;
++    int32_t portIdStart;
++    int32_t portIdEnd;
++    int32_t certCheckPeriodDays;
++    int32_t certCheckWarnningDays;
++} certParam_t;
++
++int32_t CertParamInit(certParam_t *param);
++int32_t CheckCertTask(certParam_t *param);
++int32_t SslctxInit(certParam_t *param, SSL_CTX **ctx);
++int32_t BackgroundCertMonitorInit(certParam_t *param);
++int32_t CheckIpIsInTrustList(const char *ipAddress);
++
++#define MAX_CONNECT_COUNT 40960
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif

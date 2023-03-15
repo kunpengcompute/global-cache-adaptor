@@ -21,11 +21,11 @@ public:
     std::queue<MOSDOp *> reqQueue;
     std::queue<uint64_t> tsQueue;
     std::queue<uint64_t> period;
-    void EnQueue(MOSDOp *opReq, uint64_t ts , uint64_t p)
+    void EnQueue(MOSDOp *opReq, uint64_t ts, uint64_t p)
     {
         reqQueue.push(opReq);
-	tsQueue.push(ts);
-	period.push(p);
+        tsQueue.push(ts);
+        period.push(p);
         condOpReq.notify_all();
     }
     void DeQueue();
@@ -36,10 +36,9 @@ public:
 
     size_t GetSize()
     {
-	return reqQueue.size();
+        return reqQueue.size();
     }
 
     std::condition_variable condOpReq;
 };
 #endif
-

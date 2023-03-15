@@ -1,7 +1,7 @@
 /* License:LGPL-2.1
  *
  * Copyright (c) 2021 Huawei Technologies Co., Ltd All rights reserved.
- * 
+ *
  */
 
 #include "msg_module.h"
@@ -16,6 +16,7 @@ using namespace std;
 
 namespace {
 const string LOG_TYPE = "MSG";
+const uint32_t READ_STAT_FLAG = 0x0400;
 }
 
 static void decode_str_str_map_to_bl(bufferlist::const_iterator &p, bufferlist *out)
@@ -43,6 +44,7 @@ int MsgModule::ConvertClientopToOpreq(OSDOp &clientop, OpRequestOps &oneOp, Opti
     oneOp.opSubType = clientop.op.op;
     SaDatalog("Converting Clientop tid=%ld obj=%s type=0x%lX", tid, oneOp.objName.c_str(), oneOp.opSubType);
     switch (oneOp.opSubType) {
+        case CEPH_OSD_OP_CMPEXT:
         case CEPH_OSD_OP_SPARSE_READ:
         case CEPH_OSD_OP_SYNC_READ:
         case CEPH_OSD_OP_READ: {
@@ -50,17 +52,22 @@ int MsgModule::ConvertClientopToOpreq(OSDOp &clientop, OpRequestOps &oneOp, Opti
             optionLength.read += clientop.op.extent.length / 1024;
             oneOp.objOffset = clientop.op.extent.offset;
             oneOp.objLength = clientop.op.extent.length;
-            SaDatalog("Converting READ tid=%ld obj=%s offset=%u length=%u",
+            SaDatalog("Converting READ/CMPEXT tid=%ld obj=%s offset=%u length=%u",
                 tid, oneOp.objName.c_str(), oneOp.objOffset, oneOp.objLength);
             ConvertObjRw(clientop, oneOp);
-    	} break;
+            if (readStatFlag) {
+                oneOp.opFlags |= READ_STAT_FLAG;
+            }
+        } break;
+        case CEPH_OSD_OP_ZERO:
+        case CEPH_OSD_OP_TRUNCATE:
         case CEPH_OSD_OP_WRITEFULL:
         case CEPH_OSD_OP_WRITE: {
-	        optionType.write++;
-            optionLength.write += clientop.op.extent.length / 1024;		
+            optionType.write++;
+            optionLength.write += clientop.op.extent.length / 1024;
             oneOp.objOffset = clientop.op.extent.offset;
             oneOp.objLength = clientop.op.extent.length;
-            SaDatalog("Converting WRITE/CEPH_OSD_OP_WRITEFULL tid=%ld obj=%s offset=%u length=%u",
+            SaDatalog("Converting WRITE/CEPH_OSD_OP_WRITEFULL/ZERO/TRUNCATE tid=%ld obj=%s offset=%u length=%u",
                 tid, oneOp.objName.c_str(), oneOp.objOffset, oneOp.objLength);
             ConvertObjRw(clientop, oneOp);
         } break;
@@ -105,7 +112,7 @@ int MsgModule::ConvertClientopToOpreq(OSDOp &clientop, OpRequestOps &oneOp, Opti
                     Salog(LV_DEBUG, LOG_TYPE, "<%s,%s>", oneOp.keys[i].c_str(), oneOp.values[i].c_str());
                 }
             } else {
-                string logTmp; 
+                string logTmp;
                 for (auto &i : oneOp.keys) {
                     logTmp += i;
                     logTmp += "-";
@@ -135,9 +142,9 @@ int MsgModule::ConvertClientopToOpreq(OSDOp &clientop, OpRequestOps &oneOp, Opti
                 Salog(LV_ERROR, LOG_TYPE, "unable to decode class [%s] + method[%s]", cname.c_str(), mname.c_str());
             }
             if (cname.compare("rbd") == 0 && mname.compare("copyup") == 0) {
-                ret = 1;
+                ret = 1;        // exists copyup call
                 SaDatalog("Converting COPYUP tid=%ld obj=%s", tid, oneOp.objName.c_str());
-            } 
+            }
         } break;
         case CEPH_OSD_OP_LIST_SNAPS: {
             SaDatalog("Converting list snaps tid=%ld obj=%s", tid, oneOp.objName.c_str());
@@ -149,6 +156,16 @@ int MsgModule::ConvertClientopToOpreq(OSDOp &clientop, OpRequestOps &oneOp, Opti
         case CEPH_OSD_OP_ROLLBACK:
             ConvertRollBackOp(clientop, oneOp);
             Salog(LV_DEBUG, LOG_TYPE, "rollback snapid: %s", oneOp.values[0]);
+            break;
+        case CEPH_OSD_OP_WRITESAME: {
+            optionType.write++;
+            optionLength.write += clientop.op.writesame.length / 1024;  // 1024字节对齐
+            oneOp.objOffset = clientop.op.writesame.offset;
+            oneOp.objLength = clientop.op.writesame.length;
+            SaDatalog("Converting WRITESAME tid=%ld obj=%s offset=%u length=%u",
+                tid, oneOp.objName.c_str(), oneOp.objOffset, oneOp.objLength);
+            ConvertObjRw(clientop, oneOp);
+        }
             break;
         default: {
             Salog(LV_DEBUG, LOG_TYPE, "Translate ClientOp, unknown op:0x%lX", oneOp.opSubType);
@@ -162,7 +179,12 @@ void MsgModule::ConvertObjRw(OSDOp &clientop, OpRequestOps &oneOp)
     if (clientop.op.op == CEPH_OSD_OP_READ || clientop.op.op == CEPH_OSD_OP_SPARSE_READ ||
         clientop.op.op == CEPH_OSD_OP_SYNC_READ) {
         oneOp.outDataLen = clientop.op.extent.length;
-    } else if (clientop.op.op == CEPH_OSD_OP_WRITE || clientop.op.op == CEPH_OSD_OP_WRITEFULL) {
+    } else if (clientop.op.op == CEPH_OSD_OP_WRITE || clientop.op.op == CEPH_OSD_OP_WRITEFULL ||
+        clientop.op.op == CEPH_OSD_OP_WRITESAME) {
+        oneOp.inData = clientop.indata.c_str();
+        oneOp.inDataLen = clientop.indata.length();
+    } else if (clientop.op.op == CEPH_OSD_OP_CMPEXT) {
+        oneOp.outDataLen = clientop.op.extent.length;
         oneOp.inData = clientop.indata.c_str();
         oneOp.inDataLen = clientop.indata.length();
     }
@@ -282,3 +304,4 @@ void MsgModule::ConvertRollBackOp(OSDOp &clientop, OpRequestOps &oneOp)
     oneOp.keys.push_back("snapid");
     oneOp.values.push_back(to_string(op.snap.snapid));
 }
+
