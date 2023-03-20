@@ -257,6 +257,12 @@ int ProxyMsgr::RegisterPoolNotifyFn(NotifyPoolEventFn fn)
         return -1;
     }
 
+    ret = PoolChangeNotify();
+    if (ret != 0) {
+        ProxyDbgLogErr("notify pool failed");
+        return -1;
+    }
+
     return 0;
 }
 
