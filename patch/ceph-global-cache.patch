@@ -40,7 +40,7 @@ index 28ec9835..bc11ec5f 100644
  if(WITH_TESTS)
 diff --git a/src/client_adaptor/CMakeLists.txt b/src/client_adaptor/CMakeLists.txt
 new file mode 100644
-index 00000000..75e0a7a3
+index 00000000..1bdda286
 --- /dev/null
 +++ b/src/client_adaptor/CMakeLists.txt
 @@ -0,0 +1,16 @@
@@ -53,7 +53,7 @@ index 00000000..75e0a7a3
 +
 +add_library(ceph_client_adaptor_plugin SHARED ${client_adaptor_srcs})
 +message(STATUS "In cliend adaptor third part directory --> " ${third_part_dir})
-+target_link_libraries(ceph_client_adaptor_plugin osdc agent_client_lib das)
++target_link_libraries(ceph_client_adaptor_plugin osdc agent_client_lib das dplog)
 +
 +
 +set(client_adaptor_dir ${CEPH_INSTALL_PKGLIBDIR})
@@ -62,10 +62,10 @@ index 00000000..75e0a7a3
 +message(STATUS "Global Cache  client-adaptor cmake executing...")
 diff --git a/src/client_adaptor/ClientAdaptorMgr.cc b/src/client_adaptor/ClientAdaptorMgr.cc
 new file mode 100644
-index 00000000..9a4ed2ce
+index 00000000..cd2611cb
 --- /dev/null
 +++ b/src/client_adaptor/ClientAdaptorMgr.cc
-@@ -0,0 +1,256 @@
+@@ -0,0 +1,261 @@
 +/* License:LGPL-2.1
 +*
 +* Copyright (c) 2021 Huawei Technologies Co., Ltd All rights reserved.
@@ -322,12 +322,17 @@ index 00000000..9a4ed2ce
 +    }
 +    return ret;
 +}
++
++void ClientAdaptorCcm::init_dplog()
++{
++    dplog(883, 6, (char *)__FILE__, __LINE__, __func__, 0, "gc bypass");
++}
 diff --git a/src/client_adaptor/ClientAdaptorMgr.h b/src/client_adaptor/ClientAdaptorMgr.h
 new file mode 100644
-index 00000000..6903a293
+index 00000000..52ad3882
 --- /dev/null
 +++ b/src/client_adaptor/ClientAdaptorMgr.h
-@@ -0,0 +1,189 @@
+@@ -0,0 +1,195 @@
 +/* License:LGPL-2.1
 +*
 +* Copyright (c) 2021 Huawei Technologies Co., Ltd All rights reserved.
@@ -392,6 +397,8 @@ index 00000000..6903a293
 +
 +  virtual int32_t gc_snap_is_rollbacking(int64_t data_pool_id, const std::string image_id, int64_t snap_id) = 0;
 +
++  virtual void init_dplog() = 0;
++
 +  virtual const std::string name(){
 +    return "ClientAdaptorMgr";
 +  }
@@ -435,6 +442,8 @@ index 00000000..6903a293
 +  int32_t gc_is_rollbacking(int64_t md_pool_id, int64_t data_pool_id, const std::string image_id);
 +
 +  int32_t gc_snap_is_rollbacking(int64_t data_pool_id, const std::string image_id, int64_t snap_id);
++
++  void init_dplog();
 +
 +  const std::string name() override {
 +    return "ClientAdaptorCcm";
@@ -510,6 +519,8 @@ index 00000000..6903a293
 +  bool get_pt_status(int32_t clusterid, uint32_t pt_id) {
 +    return true;
 +  }
++
++  void init_dplog() { }
 +  void ccm_deregister(Objecter *obj) {}
 +
 +private:
@@ -1229,10 +1240,10 @@ index 00000000..3509005f
 +#endif
 diff --git a/src/client_adaptor/open_ccm.h b/src/client_adaptor/open_ccm.h
 new file mode 100644
-index 00000000..db87f7d1
+index 00000000..2f48890d
 --- /dev/null
 +++ b/src/client_adaptor/open_ccm.h
-@@ -0,0 +1,248 @@
+@@ -0,0 +1,251 @@
 +/*
 +Copyright (c) 2021 Huawei Technologies Co., Ltd All rights reserved.
 +
@@ -1476,6 +1487,9 @@ index 00000000..db87f7d1
 +
 +int32_t OpenSnapshotBusy(int64_t dataPoolId, const char *imageId, int64_t snapId);
 +
++int dplog(const int mod_id, const int log_level, const char *file_name, const int f_line,
++    const char *func_name, const int log_id, const char *format, ...);
++
 +#ifdef __cplusplus
 +}
 +#endif
@@ -1632,7 +1646,7 @@ index 2cb7fcee..59707481 100644
  }
  
 diff --git a/src/common/options.cc b/src/common/options.cc
-index 8135ea8f..9d3bb781 100644
+index 8135ea8f..dfda02a7 100644
 --- a/src/common/options.cc
 +++ b/src/common/options.cc
 @@ -1015,7 +1015,7 @@ std::vector<Option> get_global_options() {
@@ -1701,18 +1715,22 @@ index 8135ea8f..9d3bb781 100644
      Option("rbd_cache_writethrough_until_flush", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
      .set_default(true)
      .set_description("whether to make writeback caching writethrough until "
-@@ -7537,6 +7559,15 @@ static std::vector<Option> get_rbd_options() {
+@@ -7537,6 +7559,19 @@ static std::vector<Option> get_rbd_options() {
      .set_default(60)
      .set_min(0)
      .set_description("RBD Image access timestamp refresh interval. Set to 0 to disable access timestamp update."),
 +#ifdef WITH_GLOBAL_CACHE
 +    Option("global_cache", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
 +    .set_default(true)
-+    .set_description("whether to enable global cache"),
++    .set_description("whether to enable global cache das"),
 +
 +    Option("gc_perf", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
 +    .set_default(true)
 +    .set_description("whether to enable global cache perf"),
++
++    Option("gc_bypass", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
++    .set_default(false)
++    .set_description("whether to pass through global cache"),
 +#endif
    });
  }
@@ -1729,6 +1747,388 @@ index 9dffe69c..136ad538 100644
    }
    int bucket_set_alg(int id, int alg);
  
+diff --git a/src/crush/builder.c b/src/crush/builder.c
+index 68dfcb69..9d301d0d 100644
+--- a/src/crush/builder.c
++++ b/src/crush/builder.c
+@@ -6,6 +6,9 @@
+ #include <errno.h>
+ 
+ #include "crush/crush.h"
++#if defined(__arm__) || defined(__aarch64__)
++#include "crush_ln_table.h"
++#endif
+ #include "builder.h"
+ 
+ #define dprintk(args...) /* printf(args) */
+@@ -1522,4 +1525,7 @@ void set_optimal_crush_map(struct crush_map *map) {
+     (1 << CRUSH_BUCKET_LIST) |
+     (1 << CRUSH_BUCKET_STRAW) |
+     (1 << CRUSH_BUCKET_STRAW2));
++#if defined(__arm__) || defined(__aarch64__)
++  crush_init_lntable();
++#endif
+ }
+diff --git a/src/crush/crush_ln_table.h b/src/crush/crush_ln_table.h
+index aae534c9..0f67a92a 100644
+--- a/src/crush/crush_ln_table.h
++++ b/src/crush/crush_ln_table.h
+@@ -19,6 +19,9 @@
+ # include "crush_compat.h"
+ #endif
+ 
++#if defined(__arm__) || defined(__aarch64__)
++extern void crush_init_lntable();
++#endif
+ /*
+  * RH_LH_tbl[2*k] = 2^48/(1.0+k/128.0)
+  * RH_LH_tbl[2*k+1] = 2^48*log2(1.0+k/128.0)
+diff --git a/src/crush/hash.c b/src/crush/hash.c
+index ed123af4..cb1c509b 100644
+--- a/src/crush/hash.c
++++ b/src/crush/hash.c
+@@ -2,6 +2,9 @@
+ # include <linux/crush/hash.h>
+ #else
+ # include "hash.h"
++#if defined(__arm__) || defined(__aarch64__)
++# include <arm_neon.h>
++#endif
+ #endif
+ 
+ /*
+@@ -20,6 +23,58 @@
+ 		b = b-c;  b = b-a;  b = b^(a<<10);	\
+ 		c = c-a;  c = c-b;  c = c^(b>>15);	\
+ 	} while (0)
++#if defined(__arm__) || defined(__aarch64__)
++#define crush_hashmix_x3(a1, b1, c1, a2, b2, c2, a3, b3, c3) do {			\
++				a1 = a1-b1; a2 = a2-b2; a3 = a3-b3; \
++					a1 = a1-c1; a2 = a2-c2; a3 = a3-c3;	\
++						a1 = a1^(c1>>13); a2 = a2^(c2>>13); a3 = a3^(c3>>13);	\
++				b1 = b1-c1; b2 = b2-c2; b3 = b3-c3;  \
++					b1 = b1-a1; b2 = b2-a2; b3 = b3-a3;	\
++						b1 = b1^(a1<<8); b2 = b2^(a2<<8); b3 = b3^(a3<<8);	\
++				c1 = c1-a1; c2 = c2-a2; c3 = c3-a3;  \
++					c1 = c1-b1; c2 = c2-b2; c3 = c3-b3;	\
++						c1 = c1^(b1>>13); c2 = c2^(b2>>13); c3 = c3^(b3>>13);	\
++				a1 = a1-b1; a2 = a2-b2; a3 = a3-b3;  \
++					a1 = a1-c1; a2 = a2-c2; a3 = a3-c3;	\
++						a1 = a1^(c1>>12); a2 = a2^(c2>>12); a3 = a3^(c3>>12);	\
++				b1 = b1-c1; b2 = b2-c2; b3 = b3-c3;  \
++					b1 = b1-a1; b2 = b2-a2; b3 = b3-a3;	\
++						b1 = b1^(a1<<16); b2 = b2^(a2<<16);	b3 = b3^(a3<<16);\
++				c1 = c1-a1; c2 = c2-a2; c3 = c3-a3;  \
++					c1 = c1-b1; c2 = c2-b2; c3 = c3-b3;	\
++						c1 = c1^(b1>>5); c2 = c2^(b2>>5); c3 = c3^(b3>>5);	\
++				a1 = a1-b1; a2 = a2-b2; a3 = a3-b3;  \
++					a1 = a1-c1; a2 = a2-c2; a3 = a3-c3;	\
++						a1 = a1^(c1>>3); a2 = a2^(c2>>3); a3 = a3^(c3>>3);	\
++				b1 = b1-c1; b2 = b2-c2; b3 = b3-c3;  \
++					b1 = b1-a1; b2 = b2-a2; b3 = b3-a3;	\
++						b1 = b1^(a1<<10); b2 = b2^(a2<<10); b3 = b3^(a3<<10);	\
++				c1 = c1-a1; c2 = c2-a2; c3 = c3-a3;  \
++					c1 = c1-b1; c2 = c2-b2; c3 = c3-b3;	\
++						c1 = c1^(b1>>15); c2 = c2^(b2>>15); c3 = c3^(b3>>15);	\
++			} while (0);
++
++#define crush_hashmix_simdx2(a, b, c, a1, b1, c1) {\
++		a = vsubq_u32(a, b); a1 = vsubq_u32(a1, b1); a = vsubq_u32(a, c); a1 = vsubq_u32(a1, c1);\
++			a = veorq_u32(a, vshrq_n_u32(c, 13)); a1 = veorq_u32(a1, vshrq_n_u32(c1, 13));\
++		b = vsubq_u32(b, c); b1 = vsubq_u32(b1, c1); b = vsubq_u32(b, a); b1 = vsubq_u32(b1, a1);\
++			b = veorq_u32(b, vshlq_n_u32(a, 8)); b1 = veorq_u32(b1, vshlq_n_u32(a1, 8));\
++		c = vsubq_u32(c, a); c1 = vsubq_u32(c1, a1); c = vsubq_u32(c, b); c1 = vsubq_u32(c1, b1);\
++			c = veorq_u32(c, vshrq_n_u32(b, 13)); c1 = veorq_u32(c1, vshrq_n_u32(b1, 13));\
++		a = vsubq_u32(a, b); a1 = vsubq_u32(a1, b1); a = vsubq_u32(a, c); a1 = vsubq_u32(a1, c1);\
++			a = veorq_u32(a, vshrq_n_u32(c, 12)); a1 = veorq_u32(a1, vshrq_n_u32(c1, 12));\
++		b = vsubq_u32(b, c); b1 = vsubq_u32(b1, c1); b = vsubq_u32(b, a); b1 = vsubq_u32(b1, a1);\
++			b = veorq_u32(b, vshlq_n_u32(a, 16)); b1 = veorq_u32(b1, vshlq_n_u32(a1, 16));\
++		c = vsubq_u32(c, a); c1 = vsubq_u32(c1, a1); c = vsubq_u32(c, b); c1 = vsubq_u32(c1, b1);\
++			c = veorq_u32(c, vshrq_n_u32(b, 5)); c1 = veorq_u32(c1, vshrq_n_u32(b1, 5));\
++		a = vsubq_u32(a, b); a1 = vsubq_u32(a1, b1); a = vsubq_u32(a, c); a1 = vsubq_u32(a1, c1);\
++			a = veorq_u32(a, vshrq_n_u32(c, 3)); a1 = veorq_u32(a1, vshrq_n_u32(c1, 3));\
++		b = vsubq_u32(b, c); b1 = vsubq_u32(b1, c1); b = vsubq_u32(b, a); b1 = vsubq_u32(b1, a1);\
++			b = veorq_u32(b, vshlq_n_u32(a, 10)); b1 = veorq_u32(b1, vshlq_n_u32(a1, 10));\
++		c = vsubq_u32(c, a); c1 = vsubq_u32(c1, a1); c = vsubq_u32(c, b); c1 = vsubq_u32(c1, b1);\
++			c = veorq_u32(c, vshrq_n_u32(b, 15)); c1 = veorq_u32(c1, vshrq_n_u32(b1, 15));\
++	}while (0);
++#endif
+ 
+ #define crush_hash_seed 1315423911
+ 
+@@ -119,6 +174,94 @@ __u32 crush_hash32_3(int type, __u32 a, __u32 b, __u32 c)
+ 		return 0;
+ 	}
+ }
++#if defined(__arm__) || defined(__aarch64__)
++void crush_hash32_3x3(int type, __u32 ai[3], __u32 bi[3], __u32 ci[3], __u32 hashi[3])
++{
++	__u32 x[3];
++	__u32 y[3];
++	__u32 hash[3];
++	__u32 a[3];
++	__u32 b[3];
++	__u32 c[3];
++
++	switch (type) {
++	case CRUSH_HASH_RJENKINS1:
++		for (int i = 0; i < 3; i++) {
++			x[i] = 231232;
++			y[i] = 1232;
++			a[i] = ai[i];
++			b[i] = bi[i];
++			c[i] = ci[i];
++			hash[i] = crush_hash_seed ^ a[i] ^ b[i] ^ c[i];
++		}
++		crush_hashmix_x3(a[0], b[0], hash[0], a[1], b[1], hash[1], a[2], b[2], hash[2]);
++		crush_hashmix_x3(c[0], x[0], hash[0], c[1], x[1], hash[1], c[2], x[2], hash[2]);
++		crush_hashmix_x3(y[0], a[0], hash[0], y[1], a[1], hash[1], y[2], a[2], hash[2]);
++		crush_hashmix_x3(b[0], x[0], hash[0], b[1], x[1], hash[1], b[2], x[2], hash[2]);
++		crush_hashmix_x3(y[0], c[0], hash[0], y[1], c[1], hash[1], y[2], c[2], hash[2]);
++		hashi[0] = hash[0];
++		hashi[1] = hash[1];
++		hashi[2] = hash[2];
++		return;
++	default:
++		return;
++	}
++}
++
++/* Make greater use of pipelines */
++void crush_hash32_3_simdx2(int type, __u32 a[CRUSH_SIMD_NUM * 2],
++					__u32 b[CRUSH_SIMD_NUM * 2], __u32 c[CRUSH_SIMD_NUM * 2], __u32 hash[CRUSH_SIMD_NUM * 2])
++{
++	uint32x4_t a1;
++	uint32x4_t a2;
++	uint32x4_t b1;
++	uint32x4_t b2;
++	uint32x4_t c1;
++	uint32x4_t c2;
++	uint32x4_t hash1;
++	uint32x4_t hash2;
++	uint32x4_t x1;
++	uint32x4_t x2;
++	uint32x4_t y1;
++	uint32x4_t y2;
++	uint32x4_t tmp;
++
++	switch (type) {
++	case CRUSH_HASH_RJENKINS1:
++		a1 = vld1q_u32(&a[0]);
++		a2 = vld1q_u32(&a[CRUSH_SIMD_NUM]);
++		b1 = vld1q_u32(&b[0]);
++		b2 = vld1q_u32(&b[CRUSH_SIMD_NUM]);
++		c1 = vld1q_u32(&c[0]);
++		c2 = vld1q_u32(&c[CRUSH_SIMD_NUM]);
++
++		hash1 = vdupq_n_u32(crush_hash_seed);
++		x1 = vdupq_n_u32(231232);
++		y1 = vdupq_n_u32(1232);
++		hash2 = vdupq_n_u32(crush_hash_seed);
++		x2 = vdupq_n_u32(231232);
++		y2 = vdupq_n_u32(1232);
++
++		hash1 = veorq_u32(hash1, a1);
++		tmp = veorq_u32(b1, c1);
++		hash1 = veorq_u32(hash1, tmp);
++		hash2 = veorq_u32(hash2, a2);
++		tmp = veorq_u32(b2, c2);
++		hash2 = veorq_u32(hash2, tmp);
++
++		crush_hashmix_simdx2(a1, b1, hash1, a2, b2, hash2);
++		crush_hashmix_simdx2(c1, x1, hash1, c2, x2, hash2);
++		crush_hashmix_simdx2(y1, a1, hash1, y2, a2, hash2);
++		crush_hashmix_simdx2(b1, x1, hash1, b2, x2, hash2);
++		crush_hashmix_simdx2(y1, c1, hash1, y2, c2, hash2);
++
++		vst1q_u32(&hash[0], hash1);
++		vst1q_u32(&hash[CRUSH_SIMD_NUM], hash2);
++	default:
++		return;
++	}
++}
++#endif
+ 
+ __u32 crush_hash32_4(int type, __u32 a, __u32 b, __u32 c, __u32 d)
+ {
+diff --git a/src/crush/hash.h b/src/crush/hash.h
+index d1d90258..3a463122 100644
+--- a/src/crush/hash.h
++++ b/src/crush/hash.h
+@@ -11,11 +11,20 @@
+ 
+ #define CRUSH_HASH_DEFAULT CRUSH_HASH_RJENKINS1
+ 
++#if defined(__arm__) || defined(__aarch64__)
++#define CRUSH_SIMD_NUM 4	// for neon register width: 128bit
++#endif
++
+ extern const char *crush_hash_name(int type);
+ 
+ extern __u32 crush_hash32(int type, __u32 a);
+ extern __u32 crush_hash32_2(int type, __u32 a, __u32 b);
+ extern __u32 crush_hash32_3(int type, __u32 a, __u32 b, __u32 c);
++#if defined(__arm__) || defined(__aarch64__)
++extern void crush_hash32_3x3(int type, __u32 ai[3], __u32 bi[3], __u32 ci[3], __u32 hashi[3]);
++void crush_hash32_3_simdx2(int type, __u32 a[CRUSH_SIMD_NUM * 2],
++					__u32 b[CRUSH_SIMD_NUM * 2], __u32 c[CRUSH_SIMD_NUM * 2], __u32 hash[CRUSH_SIMD_NUM * 2]);
++#endif
+ extern __u32 crush_hash32_4(int type, __u32 a, __u32 b, __u32 c, __u32 d);
+ extern __u32 crush_hash32_5(int type, __u32 a, __u32 b, __u32 c, __u32 d,
+ 			    __u32 e);
+diff --git a/src/crush/mapper.c b/src/crush/mapper.c
+index 73f92a77..131e31a9 100644
+--- a/src/crush/mapper.c
++++ b/src/crush/mapper.c
+@@ -288,7 +288,27 @@ static __u64 crush_ln(unsigned int xin)
+ 
+ 	return result;
+ }
+-
++#if defined(__arm__) || defined(__aarch64__)
++/* crush_ln的输入总是先于0xffff，所以它的
++   输入全集就是0~65535，因此考虑用静态表
++   代替每一次临时计算，这可以消除ceph运行
++   过程中crush_ln的热点 */
++static __s64 *crush_ln_table = NULL;
++void crush_init_lntable()
++{
++	if (crush_ln_table != NULL) {
++		return;
++	}
++	crush_ln_table = (__s64 *)malloc(sizeof(__s64) * 65536);
++	if (crush_ln_table == NULL) {
++		printf("crush_init_lntable malloc error!\n");
++		return;
++	}
++	for (int i = 0; i < CRUSH_LN_TABLE_LEN; i++) {
++		crush_ln_table[i] = crush_ln(i & 0xffff) - 0x1000000000000ll;
++	}
++}
++#endif
+ 
+ /*
+  * straw2
+@@ -357,7 +377,95 @@ static inline __s64 generate_exponential_distribution(int type, int x, int y, in
+ 	 */
+ 	return div64_s64(ln, weight);
+ }
++#if defined(__arm__) || defined(__aarch64__)
++static inline void generate_exponential_distribution_x3(int type, int x[3], int y[3], int z[3], 
++                                                      int weight[3], __s64 res[3])
++{
++	unsigned int u[3];
++	crush_hash32_3x3(type, x, y, z, u);
++	u[0] &= 0xffff;
++	u[1] &= 0xffff;
++	u[2] &= 0xffff;
++
++	res[0] = div64_s64(crush_ln_table[u[0]], weight[0]);
++	res[1] = div64_s64(crush_ln_table[u[1]], weight[1]);
++	res[2] = div64_s64(crush_ln_table[u[2]], weight[2]);
++	return;
++}
++
++static inline void generate_exponential_distribution_simdx2(int type, int x[CRUSH_SIMD_NUM * 2], int y[CRUSH_SIMD_NUM * 2],
++			int z[CRUSH_SIMD_NUM * 2], int weight[CRUSH_SIMD_NUM * 2], __s64 draw[CRUSH_SIMD_NUM * 2])
++{
++ unsigned int u[CRUSH_SIMD_NUM * 2];
++ crush_hash32_3_simdx2(type, x, y, z, u);
++
++ for (int i = 0; i < CRUSH_SIMD_NUM * 2; i++) {
++  draw[i] = div64_s64(crush_ln_table[u[i] & 0xffff], weight[i]);
++ }
++
++ return;
++}
++
++#define STRAW2_DRAW_UPDATE(i, j) do {     \
++    if (weights[i + j]) { \
++     draw = draw_simd[j];  \
++    } else {      \
++     draw = S64_MIN;    \
++    }        \
++    if (i + j == 0 || draw > high_draw) { \
++     high = i + j;    \
++     high_draw = draw;   \
++    }        \
++   } while (0);
+ 
++static int bucket_straw2_choose(const struct crush_bucket_straw2 *bucket,
++				int x, int r, const struct crush_choose_arg *arg,
++                                int position)
++{
++	unsigned int i = 0;
++    unsigned int high = 0;
++	__s64 draw, high_draw = 0;
++    __u32 *weights = get_choose_arg_weights(bucket, arg, position);
++    __s32 *ids = get_choose_arg_ids(bucket, arg);
++    __s64 draw_simd[CRUSH_SIMD_NUM * 2];
++    int x_simd[CRUSH_SIMD_NUM * 2];
++    int r_simd[CRUSH_SIMD_NUM * 2];
++    for (int j = 0; j < CRUSH_SIMD_NUM * 2; j++) {
++        x_simd[j] = x;
++        r_simd[j] = r;
++    }
++
++    if (bucket->h.size >= CRUSH_SIMD_NUM * 2) {
++        for (i = 0; i <= bucket->h.size - (CRUSH_SIMD_NUM * 2); i += (CRUSH_SIMD_NUM * 2)) {
++            generate_exponential_distribution_simdx2(bucket->h.hash, x_simd, &ids[i], r_simd, &weights[i], draw_simd);
++            for (int j = 0; j < CRUSH_SIMD_NUM * 2; j++) {
++                STRAW2_DRAW_UPDATE(i, j);
++            }
++        }
++	}
++
++    /* x < 8 */
++    __s32 idsimd[CRUSH_SIMD_NUM * 2];
++    __u32 wtsimd[CRUSH_SIMD_NUM * 2];
++    for (int j = 0; j < bucket->h.size - i; j++) {
++        idsimd[j] = ids[i+j];
++        wtsimd[j] = weights[i+j];
++    }
++
++    if (bucket->h.size >= CRUSH_SIMD_NUM) {
++        generate_exponential_distribution_simdx2(bucket->h.hash, x_simd, idsimd, r_simd, wtsimd, draw_simd);
++        for (int j = 0; j < bucket->h.size - i; j++) {
++            STRAW2_DRAW_UPDATE(i, j);
++        }
++    } else {
++        generate_exponential_distribution_x3(bucket->h.hash, x_simd, idsimd, r_simd, wtsimd, draw_simd);
++        for (int j = 0; j < bucket->h.size - i; j++) {
++            STRAW2_DRAW_UPDATE(i, j);
++        }
++    }
++	return bucket->h.items[high];
++}
++#else
+ static int bucket_straw2_choose(const struct crush_bucket_straw2 *bucket,
+ 				int x, int r, const struct crush_choose_arg *arg,
+                                 int position)
+@@ -382,7 +490,7 @@ static int bucket_straw2_choose(const struct crush_bucket_straw2 *bucket,
+ 
+ 	return bucket->h.items[high];
+ }
+-
++#endif
+ 
+ static int crush_bucket_choose(const struct crush_bucket *in,
+ 			       struct crush_work_bucket *work,
+diff --git a/src/crush/mapper.h b/src/crush/mapper.h
+index e76be767..21efdf4b 100644
+--- a/src/crush/mapper.h
++++ b/src/crush/mapper.h
+@@ -10,6 +10,10 @@
+ 
+ #include "crush.h"
+ 
++#if defined(__arm__) || defined(__aarch64__)
++#define CRUSH_LN_TABLE_LEN 65536
++#endif
++
+ extern int crush_find_rule(const struct crush_map *map, int ruleset, int type, int size);
+ /** @ingroup API
+  *
 diff --git a/src/include/config-h.in.cmake b/src/include/config-h.in.cmake
 index d83a59b2..12dfdf5e 100644
 --- a/src/include/config-h.in.cmake
@@ -1742,6 +2142,30 @@ index d83a59b2..12dfdf5e 100644
 +
  /* Define to 1 if you have the <babeltrace/babeltrace.h> header file. */
  #cmakedefine HAVE_BABELTRACE_BABELTRACE_H 1
+ 
+diff --git a/src/include/mempool.h b/src/include/mempool.h
+index 155ec18d..7a3e651d 100644
+--- a/src/include/mempool.h
++++ b/src/include/mempool.h
+@@ -246,11 +246,16 @@ public:
+ 
+   void adjust_count(ssize_t items, ssize_t bytes);
+ 
+-  shard_t* pick_a_shard() {
++  static size_t pick_a_shard_int() {
+     // Dirt cheap, see:
+-    //   http://fossies.org/dox/glibc-2.24/pthread__self_8c_source.html
++    //   https://fossies.org/dox/glibc-2.32/pthread__self_8c_source.html
+     size_t me = (size_t)pthread_self();
+-    size_t i = (me >> 3) & ((1 << num_shard_bits) - 1);
++    size_t i = (me >> CEPH_PAGE_SHIFT) & ((1 << num_shard_bits) - 1);
++    return i;
++  }
++ 
++  shard_t* pick_a_shard() {
++    size_t i = pick_a_shard_int();
+     return &shard[i];
+   }
  
 diff --git a/src/include/rados/librados.hpp b/src/include/rados/librados.hpp
 index 0c047c43..2b0ce9f2 100644
@@ -1818,7 +2242,7 @@ index 15eb9f56..10e82f41 100644
     * Drop any cached data for this image
     *
 diff --git a/src/librados/RadosClient.cc b/src/librados/RadosClient.cc
-index 902c2c66..aeb15fa1 100644
+index 902c2c66..e2e198b1 100644
 --- a/src/librados/RadosClient.cc
 +++ b/src/librados/RadosClient.cc
 @@ -52,6 +52,11 @@
@@ -1833,7 +2257,7 @@ index 902c2c66..aeb15fa1 100644
  #define dout_subsys ceph_subsys_rados
  #undef dout_prefix
  #define dout_prefix *_dout << "librados: "
-@@ -495,7 +500,23 @@ int librados::RadosClient::create_ioctx(const char *name, IoCtxImpl **io)
+@@ -495,7 +500,25 @@ int librados::RadosClient::create_ioctx(const char *name, IoCtxImpl **io)
    if (poolid < 0) {
      return (int)poolid;
    }
@@ -1843,10 +2267,12 @@ index 902c2c66..aeb15fa1 100644
 +  auto plugin = static_cast<ClientAdaptorPlugin *>(reg->get_with_load("global_cache", "client_adaptor_plugin"));
 +  ceph_assert(plugin);
 +  int32_t node_pool =  -1;
-+  int32_t ret = plugin->msg_ref->get_node_pool(poolid, &node_pool);
-+  if (ret != 0) {
-+    lderr(cct) << __func__ << " get node pool from ma failed" << dendl;
-+    return -EHOSTUNREACH;
++  if (!cct->_conf.get_val<bool>("gc_bypass")) {
++    int32_t ret = plugin->msg_ref->get_node_pool(poolid, &node_pool);
++    if (ret != 0) {
++        lderr(cct) << __func__ << " get node pool from ma failed" << dendl;
++        return -EHOSTUNREACH;
++    }
 +  }
 +  if (node_pool <= 4 && node_pool >= 1) {
 +    ldout(cct, 10) << __func__ << " poolid " << poolid << " belong to node " << node_pool << " is acc pool" << dendl;
@@ -1858,7 +2284,7 @@ index 902c2c66..aeb15fa1 100644
    *io = new librados::IoCtxImpl(this, objecter, poolid, CEPH_NOSNAP);
    return 0;
  }
-@@ -506,6 +527,24 @@ int librados::RadosClient::create_ioctx(int64_t pool_id, IoCtxImpl **io)
+@@ -506,6 +529,26 @@ int librados::RadosClient::create_ioctx(int64_t pool_id, IoCtxImpl **io)
    int r = pool_get_name(pool_id, &pool_name, true);
    if (r < 0)
      return r;
@@ -1868,10 +2294,12 @@ index 902c2c66..aeb15fa1 100644
 +  auto plugin = static_cast<ClientAdaptorPlugin *>(reg->get_with_load("global_cache", "client_adaptor_plugin"));
 +  ceph_assert(plugin);
 +  int32_t node_pool =  -1;
-+  int32_t ret  = plugin->msg_ref->get_node_pool(pool_id, &node_pool);
-+  if (ret != 0) {
-+    lderr(cct) << __func__ << " get node pool from ma failed" << dendl;
-+    return -EHOSTUNREACH;
++  if (!cct->_conf.get_val<bool>("gc_bypass")) {
++    int32_t ret  = plugin->msg_ref->get_node_pool(pool_id, &node_pool);
++    if (ret != 0) {
++        lderr(cct) << __func__ << " get node pool from ma failed" << dendl;
++        return -EHOSTUNREACH;
++    }
 +  }
 +  if (node_pool <= 4 && node_pool >=1) {
 +    ldout(cct, 10) << __func__ << " poolid " << pool_id << " belong to node " << node_pool << " is acc pool" << dendl;
@@ -4648,7 +5076,7 @@ index 4b03f5eb..a2c05c5b 100644
    session_stream_handlers = \
      ceph::crypto::onwire::rxtx_t::create_handler_pair(cct, *auth_meta, false);
 diff --git a/src/osdc/Objecter.cc b/src/osdc/Objecter.cc
-index bc39114a..4a0f9884 100644
+index bc39114a..706fce42 100644
 --- a/src/osdc/Objecter.cc
 +++ b/src/osdc/Objecter.cc
 @@ -51,6 +51,18 @@
@@ -4683,7 +5111,7 @@ index bc39114a..4a0f9884 100644
    l_osdc_op,
    l_osdc_op_r,
    l_osdc_op_w,
-@@ -236,6 +252,30 @@ void Objecter::init()
+@@ -236,6 +252,34 @@ void Objecter::init()
  {
    ceph_assert(!initialized);
  
@@ -4691,30 +5119,34 @@ index bc39114a..4a0f9884 100644
 +  PluginRegistry *reg = cct->get_plugin_registry();
 +  auto plugin = static_cast<ClientAdaptorPlugin *>(reg->get_with_load("global_cache", "client_adaptor_plugin"));
 +  ceph_assert(plugin);
-+  int32_t ccm_ret = (static_cast<ClientAdaptorPlugin *>(plugin))->mgr_ref->init_mgr(this);
-+  if (ccm_ret){
-+    ldout(cct, 3) << "Client Adaptor: " << __func__ << " Initiate manager failed ret " << ccm_ret <<dendl;
-+    (static_cast<ClientAdaptorPlugin *>(plugin))->mgr_ref->set_init_flag(false);
-+    ceph_abort();
-+  }
-+  (static_cast<ClientAdaptorPlugin *>(plugin))->mgr_ref->set_init_flag(true);
-+  if (cct->_conf.get_val<bool>("global_cache")) {
-+    if ((static_cast<ClientAdaptorPlugin *>(plugin))->msg_ref->das_init(this)){
-+      ldout(cct, 3) << "Client Adaptor: " << __func__ << " Initiate DAS failed, close prefetch" << dendl;
++  if (!cct->_conf.get_val<bool>("gc_bypass")) {
++    int32_t ccm_ret = (static_cast<ClientAdaptorPlugin *>(plugin))->mgr_ref->init_mgr(this);
++    if (ccm_ret){
++        ldout(cct, 3) << "Client Adaptor: " << __func__ << " Initiate manager failed ret " << ccm_ret <<dendl;
++        (static_cast<ClientAdaptorPlugin *>(plugin))->mgr_ref->set_init_flag(false);
++        ceph_abort();
 +    }
++    (static_cast<ClientAdaptorPlugin *>(plugin))->mgr_ref->set_init_flag(true);
++    if (cct->_conf.get_val<bool>("global_cache")) {
++        if ((static_cast<ClientAdaptorPlugin *>(plugin))->msg_ref->das_init(this)){
++        ldout(cct, 3) << "Client Adaptor: " << __func__ << " Initiate DAS failed, close prefetch" << dendl;
++        }
++    }
++    ldout(cct, 3) << __func__ << " Client Adaptor: PID: " << dec << getpid() << " TID: " << gettid() << dendl;
++    ldout(cct, 3) << __func__ << " Client Adaptor: Objecter pointer: " << hex << this << dendl;
++    if (cct->_conf.get_val<bool>("global_cache_tick")) {
++        plugin->perf_ref->start_record(plugin);
++    }
++    gc_perf = cct->_conf.get_val<bool>("gc_perf");
++  } else {
++      (static_cast<ClientAdaptorPlugin *>(plugin))->mgr_ref->init_dplog();
 +  }
-+  ldout(cct, 3) << __func__ << " Client Adaptor: PID: " << dec << getpid() << " TID: " << gettid() << dendl;
-+  ldout(cct, 3) << __func__ << " Client Adaptor: Objecter pointer: " << hex << this << dendl;
-+  if (cct->_conf.get_val<bool>("global_cache_tick")) {
-+    plugin->perf_ref->start_record(plugin);
-+  }
-+  gc_perf = cct->_conf.get_val<bool>("gc_perf");
 +#endif
 +
    if (!logger) {
      PerfCountersBuilder pcb(cct, "objecter", l_osdc_first, l_osdc_last);
  
-@@ -246,6 +286,14 @@ void Objecter::init()
+@@ -246,6 +290,14 @@ void Objecter::init()
      pcb.add_u64_counter(l_osdc_op_send_bytes, "op_send_bytes", "Sent data", NULL, 0, unit_t(UNIT_BYTES));
      pcb.add_u64_counter(l_osdc_op_resend, "op_resend", "Resent operations");
      pcb.add_u64_counter(l_osdc_op_reply, "op_reply", "Operation reply");
@@ -4729,7 +5161,7 @@ index bc39114a..4a0f9884 100644
  
      pcb.add_u64_counter(l_osdc_op, "op", "Operations");
      pcb.add_u64_counter(l_osdc_op_r, "op_r", "Read operations", "rd",
-@@ -400,6 +448,38 @@ void Objecter::shutdown()
+@@ -400,6 +452,40 @@ void Objecter::shutdown()
  {
    ceph_assert(initialized);
  
@@ -4737,14 +5169,16 @@ index bc39114a..4a0f9884 100644
 +  PluginRegistry *reg = cct->get_plugin_registry();
 +  auto plugin = static_cast<ClientAdaptorPlugin *>(reg->get_with_load("global_cache", "client_adaptor_plugin"));
 +  ceph_assert(plugin);
-+  if (cct->_conf.get_val<bool>("global_cache_tick")) {
-+    plugin->perf_ref->tick_done = true;
-+    plugin->perf_ref->threads[0].join();
-+    plugin->perf_ref->outfile.close();
-+  }
-+  if (plugin){
++  if (!cct->_conf.get_val<bool>("gc_bypass")) {
++    if (cct->_conf.get_val<bool>("global_cache_tick")) {
++        plugin->perf_ref->tick_done = true;
++        plugin->perf_ref->threads[0].join();
++        plugin->perf_ref->outfile.close();
++    }
 +    plugin->msg_ref->das_remove(this);
 +    plugin->mgr_ref->ccm_deregister(this);
++  }
++  {
 +    std::lock_guard l(reg->lock);
 +    reg->remove("global_cache", "client_adaptor_plugin");
 +  }
@@ -4768,7 +5202,7 @@ index bc39114a..4a0f9884 100644
    unique_lock wl(rwlock);
  
    initialized = false;
-@@ -1062,6 +1142,15 @@ void Objecter::_scan_requests(
+@@ -1062,6 +1148,15 @@ void Objecter::_scan_requests(
    while (p != s->ops.end()) {
      Op *op = p->second;
      ++p;   // check_op_pool_dne() may touch ops; prevent iterator invalidation
@@ -4784,7 +5218,7 @@ index bc39114a..4a0f9884 100644
      ldout(cct, 10) << " checking op " << op->tid << dendl;
      _prune_snapc(osdmap->get_new_removed_snaps(), op);
      if (skipped_map) {
-@@ -1229,17 +1318,41 @@ void Objecter::handle_osd_map(MOSDMap *m)
+@@ -1229,17 +1324,41 @@ void Objecter::handle_osd_map(MOSDMap *m)
  	for (map<int,OSDSession*>::iterator p = osd_sessions.begin();
  	     p != osd_sessions.end(); ) {
  	  OSDSession *s = p->second;
@@ -4830,7 +5264,7 @@ index bc39114a..4a0f9884 100644
  	}
  
  	ceph_assert(e == osdmap->get_epoch());
-@@ -1390,6 +1503,41 @@ void Objecter::consume_blacklist_events(std::set<entity_addr_t> *events)
+@@ -1390,6 +1509,41 @@ void Objecter::consume_blacklist_events(std::set<entity_addr_t> *events)
    }
  }
  
@@ -4872,7 +5306,7 @@ index bc39114a..4a0f9884 100644
  void Objecter::emit_blacklist_events(const OSDMap::Incremental &inc)
  {
    if (!blacklist_events_enabled) {
-@@ -1772,6 +1920,56 @@ int Objecter::_get_session(int osd, OSDSession **session, shunique_lock& sul)
+@@ -1772,6 +1926,56 @@ int Objecter::_get_session(int osd, OSDSession **session, shunique_lock& sul)
      return 0;
    }
  
@@ -4929,7 +5363,7 @@ index bc39114a..4a0f9884 100644
    map<int,OSDSession*>::iterator p = osd_sessions.find(osd);
    if (p != osd_sessions.end()) {
      OSDSession *s = p->second;
-@@ -1787,6 +1985,7 @@ int Objecter::_get_session(int osd, OSDSession **session, shunique_lock& sul)
+@@ -1787,6 +1991,7 @@ int Objecter::_get_session(int osd, OSDSession **session, shunique_lock& sul)
    OSDSession *s = new OSDSession(cct, osd);
    osd_sessions[osd] = s;
    s->con = messenger->connect_to_osd(osdmap->get_addrs(osd));
@@ -4937,7 +5371,7 @@ index bc39114a..4a0f9884 100644
    s->con->set_priv(RefCountedPtr{s});
    logger->inc(l_osdc_osd_session_open);
    logger->set(l_osdc_osd_sessions, osd_sessions.size());
-@@ -2180,7 +2379,12 @@ void Objecter::tick()
+@@ -2180,7 +2385,12 @@ void Objecter::tick()
        (*i)->con->send_message(new MPing);
      }
    }
@@ -4951,7 +5385,7 @@ index bc39114a..4a0f9884 100644
    // Make sure we don't reschedule if we wake up after shutdown
    if (initialized) {
      tick_event = timer.reschedule_me(ceph::make_timespan(
-@@ -2363,10 +2567,25 @@ void Objecter::_op_submit(Op *op, shunique_lock& sul, ceph_tid_t *ptid)
+@@ -2363,10 +2573,25 @@ void Objecter::_op_submit(Op *op, shunique_lock& sul, ceph_tid_t *ptid)
    // pick target
    ceph_assert(op->session == NULL);
    OSDSession *s = NULL;
@@ -4978,7 +5412,7 @@ index bc39114a..4a0f9884 100644
    // Try to get a session, including a retry if we need to take write lock
    int r = _get_session(op->target.osd, &s, sul);
    if (r == -EAGAIN ||
-@@ -2382,8 +2601,24 @@ void Objecter::_op_submit(Op *op, shunique_lock& sul, ceph_tid_t *ptid)
+@@ -2382,8 +2607,24 @@ void Objecter::_op_submit(Op *op, shunique_lock& sul, ceph_tid_t *ptid)
        // map changed; recalculate mapping
        ldout(cct, 10) << __func__ << " relock raced with osdmap, recalc target"
  		     << dendl;
@@ -5004,7 +5438,7 @@ index bc39114a..4a0f9884 100644
        if (s) {
  	put_session(s);
  	s = NULL;
-@@ -2453,6 +2688,17 @@ void Objecter::_op_submit(Op *op, shunique_lock& sul, ceph_tid_t *ptid)
+@@ -2453,6 +2694,17 @@ void Objecter::_op_submit(Op *op, shunique_lock& sul, ceph_tid_t *ptid)
    _session_op_assign(s, op);
  
    if (need_send) {
@@ -5022,7 +5456,7 @@ index bc39114a..4a0f9884 100644
      _send_op(op);
    }
  
-@@ -2770,6 +3016,232 @@ void Objecter::_prune_snapc(
+@@ -2770,6 +3022,232 @@ void Objecter::_prune_snapc(
    }
  }
  
@@ -5255,7 +5689,7 @@ index bc39114a..4a0f9884 100644
  int Objecter::_calc_target(op_target_t *t, Connection *con, bool any_change)
  {
    // rwlock is locked
-@@ -2969,6 +3441,7 @@ int Objecter::_calc_target(op_target_t *t, Connection *con, bool any_change)
+@@ -2969,6 +3447,7 @@ int Objecter::_calc_target(op_target_t *t, Connection *con, bool any_change)
    return RECALC_OP_TARGET_NO_ACTION;
  }
  
@@ -5263,7 +5697,7 @@ index bc39114a..4a0f9884 100644
  int Objecter::_map_session(op_target_t *target, OSDSession **s,
  			   shunique_lock& sul)
  {
-@@ -3139,7 +3612,6 @@ void Objecter::_finish_op(Op *op, int r)
+@@ -3139,7 +3618,6 @@ void Objecter::_finish_op(Op *op, int r)
    }
  
    logger->dec(l_osdc_op_active);
@@ -5271,7 +5705,7 @@ index bc39114a..4a0f9884 100644
    ceph_assert(check_latest_map_ops.find(op->tid) == check_latest_map_ops.end());
  
    inflight_ops--;
-@@ -3271,6 +3743,38 @@ void Objecter::_send_op(Op *op)
+@@ -3271,6 +3749,38 @@ void Objecter::_send_op(Op *op)
    if (op->trace.valid()) {
      m->trace.init("op msg", nullptr, &op->trace);
    }
@@ -5310,7 +5744,7 @@ index bc39114a..4a0f9884 100644
    op->session->con->send_message(m);
  }
  
-@@ -3326,6 +3830,148 @@ int Objecter::take_linger_budget(LingerOp *info)
+@@ -3326,6 +3836,148 @@ int Objecter::take_linger_budget(LingerOp *info)
    return 1;
  }
  
@@ -5459,7 +5893,7 @@ index bc39114a..4a0f9884 100644
  /* This function DOES put the passed message before returning */
  void Objecter::handle_osd_op_reply(MOSDOpReply *m)
  {
-@@ -3348,7 +3994,11 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
+@@ -3348,7 +4000,11 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
      m->put();
      return;
    }
@@ -5472,7 +5906,7 @@ index bc39114a..4a0f9884 100644
    OSDSession::unique_lock sl(s->lock);
  
    map<ceph_tid_t, Op *>::iterator iter = s->ops.find(tid);
-@@ -3406,7 +4056,6 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
+@@ -3406,7 +4062,6 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
    Context *onfinish = 0;
  
    int rc = m->get_result();
@@ -5480,7 +5914,7 @@ index bc39114a..4a0f9884 100644
    if (m->is_redirect_reply()) {
      ldout(cct, 5) << " got redirect reply; redirecting" << dendl;
      if (op->onfinish)
-@@ -3438,13 +4087,58 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
+@@ -3438,13 +4093,58 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
      op->target.flags &= ~(CEPH_OSD_FLAG_BALANCE_READS |
  			  CEPH_OSD_FLAG_LOCALIZE_READS);
      op->target.pgid = pg_t();
@@ -5539,7 +5973,7 @@ index bc39114a..4a0f9884 100644
    if (op->objver)
      *op->objver = m->get_user_version();
    if (op->reply_epoch)
-@@ -4399,6 +5093,53 @@ bool Objecter::ms_handle_reset(Connection *con)
+@@ -4399,6 +5099,53 @@ bool Objecter::ms_handle_reset(Connection *con)
      if (session) {
        ldout(cct, 1) << "ms_handle_reset " << con << " session " << session
  		    << " osd." << session->osd << dendl;
@@ -5793,10 +6227,10 @@ index 00000000..2eb494c3
 +message(STATUS "Client adaptor test cmake executing...")
 diff --git a/src/test/ClientAdaptorTest/ClientAdaptorTest.cc b/src/test/ClientAdaptorTest/ClientAdaptorTest.cc
 new file mode 100644
-index 00000000..76ba074c
+index 00000000..d70fd106
 --- /dev/null
 +++ b/src/test/ClientAdaptorTest/ClientAdaptorTest.cc
-@@ -0,0 +1,424 @@
+@@ -0,0 +1,426 @@
 +/* License:LGPL-2.1
 +*
 +* Copyright (c) 2021 Huawei Technologies Co., Ltd All rights reserved.
@@ -5877,6 +6311,8 @@ index 00000000..76ba074c
 +int32_t gc_snap_is_rollbacking(int64_t data_pool_id, const std::string image_id, int64_t snap_id) {
 +  return 0;
 +}
++
++void init_dplog() { }
 +
 +const string name() override {
 +    return "ClientAdaptorCcmMock";
@@ -6223,10 +6659,10 @@ index 00000000..76ba074c
 +);
 diff --git a/src/test/ClientAdaptorTest/ClientAdaptorTest.h b/src/test/ClientAdaptorTest/ClientAdaptorTest.h
 new file mode 100644
-index 00000000..d22ea15d
+index 00000000..17dc629d
 --- /dev/null
 +++ b/src/test/ClientAdaptorTest/ClientAdaptorTest.h
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,38 @@
 +#include "gmock/gmock.h"
 +#include "client_adaptor/ClientAdaptorMgr.h"
 +
@@ -6263,6 +6699,7 @@ index 00000000..d22ea15d
 +                                        uint64_t tp_snap_id2));
 +  MOCK_METHOD3(gc_is_rollbacking, int32_t(int64_t md_pool_id, int64_t data_pool_id, const std::string image_id));
 +  MOCK_METHOD3(gc_snap_is_rollbacking, int32_t(int64_t data_pool_id, const std::string image_id, int64_t snap_id));
++  MOCK_METHOD0(init_dplog, void());
 +};
 diff --git a/src/test/ServerAdaptorSimulate/CMakeLists.txt b/src/test/ServerAdaptorSimulate/CMakeLists.txt
 new file mode 100644
